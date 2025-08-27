@@ -1,0 +1,11 @@
+.zapai-card-pd-24-16{
+  padding: 16px 24px;
+  // display: flex;
+  // flex-direction: column;
+  // align-items: flex-start;
+  gap: var(--Border-radius-border-16, 16px);
+  align-self: stretch;
+  border-radius: var(--Border-radius-border-8, 8px);
+  border: 1px solid var(--Tokens-Semantics-strokeColor-strokeColor-default, $colors-gray-gray-300);
+  background: var(--bg-background-2, #F8FAFC);
+}

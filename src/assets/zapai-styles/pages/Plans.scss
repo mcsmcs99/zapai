@@ -1,0 +1,120 @@
+.zapai-container-monthly-fee-max-discount-bill {
+  align-items: end;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  /* 3 colunas na primeira linha */
+  gap: 20px;
+  /* Espaçamento entre as divs */
+}
+
+.zapai-mw-103 {
+  width: 100%;
+  max-width: 103px;
+}
+
+.zapai-wd-130 {
+  width: 100%;
+  max-width: 140px;
+}
+
+.zapai-mt-18{
+ margin-top: 18px;
+}
+
+.zapai-mt-32{
+  margin-top: 32px;
+}
+
+.wd-80 {
+  width: 100%;
+  max-width: 860px;
+}
+
+.zapai-gap-4{
+  gap: 4px;
+}
+
+.card-available-plan {
+  border-radius: 8px !important;
+}
+
+.zapai-pd-8-32{
+  padding: 8px 32px;
+}
+
+.zapai-coupon-card {
+  width: 100%;
+  max-width: 264px;
+  border-radius: var(--Border-radius-border-8, 8px);
+  border: 1px solid var(--Tokens-Semantics-strokeColor-strokeColor-default, #D9D9D9);
+  background: #FFF;
+  box-shadow: 0px 10px 15px -3px rgba(0, 0, 0, 0.10), 0px 4px 6px -2px rgba(0, 0, 0, 0.05);
+  padding: 16px;
+  display: grid;
+  gap: 13px;
+}
+
+.zapai-bnt-more-coupon-card {
+  box-shadow: 0px 4px 6px -1px rgba(0, 0, 0, 0.10), 0px 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+.zapai-gap-24 {
+  gap: 24px;
+}
+
+.zapai-text-color-neutral-500 {
+  color: #504F50;
+}
+
+.zapai-border-7b7b7b{
+  border: 1px solid #7b7b7b !important;
+}
+
+.zapai-gap-41{
+  gap: 41px;
+}
+
+.zapai-grid-gap-8{
+  display: grid;
+  grid-gap: 8px;
+}
+
+.zapai-my-18{
+  margin-top: 18px;
+  margin-bottom: 18px;
+}
+
+.zapai-coupon-complete-payment{
+  display: flex;
+  align-items: center;
+  padding: 4px 16px;
+  gap: 8px;
+  align-self: stretch;
+  border-radius: 4px;
+}
+
+.zapai-coupon-applied{
+  background: #EDF9F4;
+  color: #23B573;
+}
+
+.zapai-coupon-invalid{
+  background-color: #FFEBEF;
+  color: #FF3733;
+}
+
+.zapai-add-coupon{
+  display: grid;
+  gap: 8px;
+}
+
+.zapai-hover-selected-installment-option{
+  &:hover{
+    background: var(--bg-background-2, #F8FAFC);
+  }
+}
+
+.zapai-selected-installment-option{
+  background: var(--bg-background-2, #F8FAFC);
+}

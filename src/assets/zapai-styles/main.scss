@@ -1,0 +1,49 @@
+// Utils
+@import './utils/fonts.scss';
+@import './utils/tokens.scss';
+@import './utils/borders.scss';
+@import './utils/gaps.scss';
+@import './utils/spaces.scss';
+@import './utils/textColors.scss';
+@import './utils/bgColors.scss';
+
+// Components
+@import './components/button.scss';
+@import './components/badge.scss';
+@import './components/chip.scss';
+@import './components/typography.scss';
+@import './components/card.scss';
+@import './components/inputs.scss';
+@import './components/select.scss';
+@import './components/swal2.scss';
+@import './components/toggle.scss';
+
+//Pages
+@import './pages/Plans.scss';
+@import './pages/MyDomainsPage.scss';
+
+
+//Global
+.tab-top-title {
+  color: var(--Tokens-Semantics-textColor-textColor-default, #252525);
+  font-family: Inter;
+  font-size: 19.429px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 24.286px;
+  /* 125% */
+  letter-spacing: -0.117px;
+  padding-left: 8.5px;
+}
+
+@media (max-width: 700px) {
+  .tab-top-title {
+    font-size: 15px;
+    padding-left: 0;
+  }
+
+  .main-page-admin {
+    padding: 5px;
+    max-width: 100%;
+  }
+}

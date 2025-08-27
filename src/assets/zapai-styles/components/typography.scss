@@ -1,0 +1,270 @@
+.zapai-text {
+  // flex: 1 0 0;
+  font-family: Inter;
+  // @extend .textColor-dark;
+}
+
+// Heading
+
+.zapai-text-overline-s-regular{
+  /* Overline/S - Regular */
+  font-family: Inter;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 18px; /* 180% */
+  letter-spacing: 1px;
+  text-transform: uppercase;
+
+}
+/* Heading/XL - 36px */
+.zapai-text-heading-xl {
+  @extend .zapai-text;
+  font-size: 36px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 44px; /* 122.222% */
+  letter-spacing: -0.792px;
+}
+
+.zapai-text-heading-32 {
+  @extend .zapai-text;
+  font-size: 32px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 35.2px; /* 122.222% */
+  letter-spacing: -1.28px;
+}
+
+/* Heading/L - 28px */
+.zapai-text-heading-l {
+  @extend .zapai-text;
+  font-size: 28px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 36px; /* 128.571% */
+  letter-spacing: -0.588px;
+}
+
+/* Heading/M - 24px */
+.zapai-text-heading-m {
+  @extend .zapai-text;
+  font-size: 24px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 34px; /* 141.667% */
+  letter-spacing: -0.456px;
+}
+
+/* Heading/S - 20px */
+.zapai-text-heading-s {
+  @extend .zapai-text;
+  font-size: 20px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 28px; /* 140% */
+  letter-spacing: -0.34px;
+}
+
+/* Heading/XS - 16px */
+.zapai-text-heading-xs {
+  @extend .zapai-text;
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 22px; /* 137.5% */
+  letter-spacing: -0.176px;
+}
+
+// Text XL (Extra Large)
+
+/* Text XL/Regular - 20px */
+.zapai-text-xl-regular {
+  @extend .zapai-text;
+  font-size: 20px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 28px; /* 140% */
+  letter-spacing: -0.34px;
+}
+
+/* Text XL/Medium - 20px */
+.zapai-text-xl-medium {
+  @extend .zapai-text;
+  font-size: 20px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 28px; /* 140% */
+  letter-spacing: -0.34px;
+}
+
+/* Text XL/Semibold - 20px */
+.zapai-text-xl-semibold {
+  @extend .zapai-text;
+  font-size: 20px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 28px; /* 140% */
+  letter-spacing: -0.34px;
+}
+
+/* Text XL/bold - 20px */
+.zapai-text-xl-bold-700 {
+  @extend .zapai-text;
+  font-size: 20px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 22px; /* 140% */
+  letter-spacing: -0.34px;
+}
+
+// Text L (Large)
+
+/* Text L/Regular - 16px */
+.zapai-text-l-regular {
+  @extend .zapai-text;
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 24px; /* 150% */
+  letter-spacing: -0.176px;
+}
+
+/* Text L/Medium - 16px */
+.zapai-text-l-medium {
+  @extend .zapai-text;
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 24px; /* 150% */
+  letter-spacing: -0.176px;
+}
+
+/* Text L/Semibold - 16px */
+.zapai-text-l-semibold {
+  // @extend .zapai-text;
+  font-family: Inter;
+  font-size: 16px !important;
+  font-style: normal;
+  font-weight: 600 !important;
+  line-height: 24px; /* 150% */
+  letter-spacing: -0.176px;
+}
+
+/* Text M/Regular - 14px */
+.zapai-text-m-regular {
+  @extend .zapai-text;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 20px; /* 142.857% */
+  letter-spacing: -0.084px;
+}
+
+/* Text M/Medium - 14px */
+.zapai-text-m-medium {
+  @extend .zapai-text;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 20px; /* 142.857% */
+  letter-spacing: -0.084px;
+}
+
+/* Text M/Semibold - 14px */
+.zapai-text-m-semibold {
+  @extend .zapai-text;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 20px; /* 142.857% */
+  letter-spacing: -0.084px;
+}
+/* Text M/bold - 14px */
+.zapai-text-m-bold-600 {
+  @extend .zapai-text;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 20px; /* 142.857% */
+  letter-spacing: -0.084px;
+}
+
+// Text S (Small)
+
+/* Text S/Regular - 12px */
+.zapai-text-s-regular {
+  @extend .zapai-text;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 18px; /* 150% */
+}
+
+/* Text S/Medium - 12px */
+.zapai-text-s-medium {
+  @extend .zapai-text;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 18px; /* 150% */
+}
+
+/* Text S/Semibold - 12px */
+.zapai-text-s-semibold {
+  @extend .zapai-text;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 18px; /* 150% */
+}
+
+/* Text S/bold - 12px */
+.zapai-text-s-bold-700 {
+  @extend .zapai-text;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 18px; /* 150% */
+}
+
+/* Body/level1 */
+.zapai-text-body-level1 {
+  @extend .zapai-text;
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 150%; /* 24px */
+}
+
+.zapai-text-body-level18 {
+  @extend .zapai-text;
+  font-size: 18px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 133.333%; /* 24px */
+  letter-spacing: -0.72px;
+}
+
+.zapai-text-underline {
+  text-decoration-line: underline;
+}
+
+/* Body/Level2 */
+.zapai-text-body-level2 {
+  /* Body/Level2 */
+  font-family: Inter;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 150%; /* 21px */
+}
+
+/* Body 2/Regular */
+.zapai-text-body-2-regular {
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: normal;
+  letter-spacing: 0.14px;
+}

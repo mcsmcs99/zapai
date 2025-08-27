@@ -1,0 +1,46 @@
+.zapai-badge{
+  border-radius: 100px;
+  width: fit-content;
+  height: fit-content;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.zapai-indicator-badge{
+  border-radius: 50%;
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  position: relative;
+}
+
+.zapai-badge-status-paid, .zapai-badge-status-approved, .zapai-badge-status-published{
+  @extend .zapai-badge;
+  @extend .bgColor-lightgreen;
+
+  .indicator{
+    @extend .zapai-indicator-badge;
+    @extend .bgColor-green;
+  }
+}
+
+.zapai-badge-status-defeated, .zapai-badge-status-canceled, .zapai-badge-status-eresed{
+  @extend .zapai-badge;
+  @extend .bgColor-light-red;
+
+  .indicator{
+    @extend .zapai-indicator-badge;
+    @extend .bgColor-red;
+  }
+}
+
+.zapai-badge-status-pending, .zapai-badge-status-overdue, .zapai-badge-status-draft{
+  @extend .zapai-badge;
+  @extend .bgColor-lightyellow;
+
+  .indicator{
+    @extend .zapai-indicator-badge;
+    @extend .bgColor-yellow;
+  }
+}

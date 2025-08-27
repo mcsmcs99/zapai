@@ -1,0 +1,281 @@
+.zapai-input {
+    display: flex;
+    padding: 12px 16px;
+    align-items: center;
+    gap: 1px;
+    align-self: stretch;
+    flex: 1;
+}
+
+.zapai-input-small{
+  height: 37px
+}
+.zapai-input-medium{
+  height: 48px
+}
+
+.zapai-basic-input-field {
+    @extend .zapai-input;
+    @extend .border-radius-8;
+    border: 1px solid #{$colors-gray-gray-400};
+    &:hover{
+        border: 1px solid #{$colors-secondary-primary-500};
+        @extend .bgColor-placeholder;
+    }
+    &:focus{
+        border: 1px solid #{$colors-secondary-primary-500};
+    }
+    &::placeholder, &:-webkit-input-placeholder, &:-ms-input-placeholder, &::-moz-placeholder {
+        @extend .textColor-placeholder;
+    }
+    &[disabled] {
+        @extend .bgColor-light-gray;
+        border: none;
+        @extend .textColor-gray-400;
+    }
+    &.active{
+        border: 1px solid #{$colors-green-green-500};
+    }
+    &.error{
+        border: 1px solid #{$colors-red-red-500} !important;
+    }
+}
+
+.input-container {
+    display: flex;
+    align-items: center; /* Alinha verticalmente */
+    width: 100%;
+    flex: 1;
+    padding: 0px 16px 0px 0px;
+}
+
+.password-icon {
+cursor: pointer;
+    margin-left: -30px; /* Ajuste o valor conforme necessário para posicionar o ícone */
+    color: #323232; /* Cor do ícone */
+}
+
+.zapai-input-search {
+  @extend .zapai-input;
+  @extend .border-radius-8;
+  border: 1px solid #D0D2D4 !important;
+  &:hover{
+      border: 1px solid #{$colors-secondary-primary-500} !important;
+      @extend .bgColor-placeholder;
+  }
+  &:focus{
+    border-radius: 6px !important;
+    border: 1px solid #1C0DFF !important;
+    background: #EFEEFF;
+    outline: none;
+  }
+  &::placeholder, &:-webkit-input-placeholder, &:-ms-input-placeholder, &::-moz-placeholder {
+      @extend .textColor-placeholder;
+  }
+  &[disabled] {
+      @extend .bgColor-light-gray;
+      border: none;
+      @extend .textColor-gray-400;
+  }
+  &.active{
+      border: 1px solid #{$colors-green-green-500};
+  }
+  &.error{
+      border: 1px solid #{$colors-red-red-500} !important;
+  }
+  display: flex;
+  height: 47px;
+  padding: 0 10px;
+  align-items: center;
+  align-self: stretch;
+  border-radius: 6px !important;
+  width: 100% !important;
+  border: 1px solid #ccc; /* Cor da borda padrão */
+  background: transparent; /* Fundo padrão */
+  transition: all 0.3s ease; /* Transição suave para o focus */
+}
+
+
+
+.email-btn-consult {
+  position: absolute;
+  right: -80px;
+  background: none;
+  border: none;
+  color: var(--tokens-semantics-textcolor-textcolor-primary, #455ce9);
+  font-family: Inter;
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 150%;
+  letter-spacing: -0.176px;
+  cursor: pointer;
+  margin-top: -38px;
+  padding: 5px 10px 5px 10px;
+  border-radius: 8px;
+  &:hover {
+    background-color: var(--tokens-semantics-strokecolor-strokecolor-default);
+  }
+}
+
+.zapai-input-date-range{
+  @extend .border-radius-8;
+  border: 1px solid #{$colors-gray-gray-400};
+  padding: 0 16px;
+
+  &:hover{
+    border: 1px solid #{$colors-secondary-primary-500};
+    @extend .bgColor-placeholder;
+  }
+  &:focus{
+      border: 1px solid #{$colors-secondary-primary-500};
+      background-color: red !important;
+  }
+  &::placeholder, &:-webkit-input-placeholder, &:-ms-input-placeholder, &::-moz-placeholder {
+      @extend .textColor-placeholder;
+  }
+  &[disabled] {
+      @extend .bgColor-light-gray;
+      border: none;
+      @extend .textColor-gray-400;
+  }
+  &.active{
+      border: 1px solid #{$colors-green-green-500};
+  }
+  &.error{
+      border: 1px solid #{$colors-red-red-500};
+  }
+}
+
+.zapai-input-error {
+  border: 1px solid #df0909 !important;
+}
+
+.zapai-append-input{
+  position: absolute;
+  top: 37px;
+  right: 18px;
+  color: #6C757D;
+}
+
+.zapai-prepend-input{
+  position: absolute;
+  top: 37px;
+  left: 18px;
+  color: #6C757D;
+}
+
+.zapai-pl-prepend-input{
+  padding-left: 40px !important;
+}
+
+
+
+/* Estilo do input normal */
+.zapai-custom-input-field {
+  @extend .zapai-input;
+  @extend .border-radius-8;
+  border: 1px solid #D0D2D4 !important;
+  &:hover{
+      border: 1px solid #{$colors-secondary-primary-500} !important;
+      @extend .bgColor-placeholder;
+  }
+  &:focus{
+    border-radius: 6px !important;
+    border: 1px solid #1C0DFF !important;
+    background: #EFEEFF;
+    outline: none;
+  }
+  &::placeholder, &:-webkit-input-placeholder, &:-ms-input-placeholder, &::-moz-placeholder {
+      @extend .textColor-placeholder;
+  }
+  &[disabled] {
+      @extend .bgColor-light-gray;
+      border: none;
+      @extend .textColor-gray-400;
+  }
+  &.active{
+      border: 1px solid #{$colors-green-green-500};
+  }
+  &.error{
+      border: 1px solid #{$colors-red-red-500} !important;
+  }
+  display: flex;
+  height: 37px;
+  padding: 8px 16px;
+  align-items: center;
+  align-self: stretch;
+  border-radius: 6px !important;
+  width: 100% !important;
+  border: 1px solid #ccc; /* Cor da borda padrão */
+  background: transparent; /* Fundo padrão */
+  transition: all 0.3s ease; /* Transição suave para o focus */
+}
+
+.zapai-custom-input-field.q-field--focused {
+  border-radius: 6px !important;
+  border: 1px solid #1C0DFF !important; /* Cor da borda ao focar */
+  background: #EFEEFF; /* Cor de fundo ao focar */
+  outline: none; /* Remove a borda de foco padrão do navegador */
+}
+
+.q-field__control {
+  min-height: 35px !important;
+}
+
+.input-group {
+  display: flex;
+  align-items: center;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+
+.input-group-config-custom {
+  display: flex;
+  height: 37px;
+  padding: 8px 16px;
+  align-items: center;
+  align-self: stretch;
+  border-radius: 6px !important;
+  border: none !important;
+  width: 100% !important;
+  border: 1px solid #ccc; /* Cor da borda padrão */
+  background: transparent; /* Fundo padrão */
+  transition: all 0.3s ease; /* Transição suave para o focus */
+}
+
+/* Remove a borda no hover */
+.input-group-config-custom:hover {
+  border: none !important;
+  outline: none !important;
+}
+
+/* Remove a borda no focus */
+.input-group-config-custom:focus {
+  border: none !important;
+  outline: none !important;
+}
+
+
+
+
+.input-group input {
+  flex: 1;
+  border: none;
+  padding: 8px;
+}
+
+.input-group .apply-btn {
+  padding: 8px 12px;
+  border: none;
+  cursor: pointer;
+  /* Text M/Regular - 14px */
+  font-family: "Public Sans";
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 20px; /* 142.857% */
+  letter-spacing: -0.084px;
+  text-transform: capitalize;
+}
+

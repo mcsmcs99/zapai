@@ -1,0 +1,258 @@
+// Cores primárias
+  .textColor-primary-900 {
+    color: $colors-primary-primary-900;
+  }
+  .textColor-primary-800 {
+    color: $colors-primary-primary-800;
+  }
+  .textColor-primary-700 {
+    color: $colors-primary-primary-700;
+  }
+  .textColor-primary-600 {
+    color: $colors-primary-primary-600;
+  }
+  .textColor-primary-500 {
+    color: $colors-primary-primary-500;
+  }
+  .textColor-primary-400 {
+    color: $colors-primary-primary-400;
+  }
+  .textColor-primary-300 {
+    color: $colors-primary-primary-300;
+  }
+  .textColor-primary-200 {
+    color: $colors-primary-primary-200;
+  }
+  .textColor-primary-50 {
+    color: $colors-primary-primary-50;
+  }
+
+  // Cores secundárias
+  .textColor-secondary-900 {
+    color: $colors-secondary-primary-900;
+  }
+  .textColor-secondary-800 {
+    color: $colors-secondary-primary-800;
+  }
+  .textColor-secondary-700 {
+    color: $colors-secondary-primary-700;
+  }
+  .textColor-secondary-600 {
+    color: $colors-secondary-primary-600;
+  }
+  .textColor-secondary-500 {
+    color: $colors-secondary-primary-500;
+  }
+  .textColor-secondary-400 {
+    color: $colors-secondary-primary-400;
+  }
+  .textColor-secondary-300 {
+    color: $colors-secondary-primary-300;
+  }
+  .textColor-secondary-200 {
+    color: $colors-secondary-primary-200;
+  }
+  .textColor-secondary-50 {
+    color: $colors-secondary-primary-50;
+  }
+
+  // Cores azuis
+  .textColor-blue-gradient {
+    background: var(--gradient, linear-gradient(180deg, $colors-primary-primary-300 0%, $colors-primary-primary-500 100%));
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .textColor-blue-900 {
+    color: $colors-blue-blue-900;
+  }
+  .textColor-blue-800 {
+    color: $colors-blue-blue-800;
+  }
+  .textColor-blue-700 {
+    color: $colors-blue-blue-700;
+  }
+  .textColor-blue-600 {
+    color: $colors-blue-blue-600;
+  }
+  .textColor-blue-500 {
+    color: $colors-blue-blue-500;
+  }
+  .textColor-blue-400 {
+    color: $colors-blue-blue-400;
+  }
+  .textColor-blue-300 {
+    color: $colors-blue-blue-300;
+  }
+  .textColor-blue-200 {
+    color: $colors-blue-blue-200;
+  }
+  .textColor-blue-50 {
+    color: $colors-blue-blue-50;
+  }
+
+  // Cores verdes
+  .textColor-green-900 {
+    color: $colors-green-green-900;
+  }
+  .textColor-green-800 {
+    color: $colors-green-green-800;
+  }
+  .textColor-green-700 {
+    color: $colors-green-green-700;
+  }
+  .textColor-green-600 {
+    color: $colors-green-green-600;
+  }
+  .textColor-green-500 {
+    color: $colors-green-green-500;
+  }
+  .textColor-green-400 {
+    color: $colors-green-green-400;
+  }
+  .textColor-green-300 {
+    color: $colors-green-green-300;
+  }
+  .textColor-green-200 {
+    color: $colors-green-green-200;
+  }
+  .textColor-green-50 {
+    color: $colors-green-green-50;
+  }
+
+  // Cores amarelas
+  .textColor-yellow-900 {
+    color: $colors-yellow-yellow-900;
+  }
+  .textColor-yellow-800 {
+    color: $colors-yellow-yellow-800;
+  }
+  .textColor-yellow-700 {
+    color: $colors-yellow-yellow-700;
+  }
+  .textColor-yellow-600 {
+    color: $colors-yellow-yellow-600;
+  }
+  .textColor-yellow-500 {
+    color: $colors-yellow-yellow-500;
+  }
+  .textColor-yellow-400 {
+    color: $colors-yellow-yellow-400;
+  }
+  .textColor-yellow-300 {
+    color: $colors-yellow-yellow-300;
+  }
+  .textColor-yellow-200 {
+    color: $colors-yellow-yellow-200;
+  }
+  .textColor-yellow-50 {
+    color: $colors-yellow-yellow-50;
+  }
+
+  // Cores vermelhas
+  .textColor-red-900 {
+    color: $colors-red-red-900;
+  }
+  .textColor-red-800 {
+    color: $colors-red-red-800;
+  }
+  .textColor-red-700 {
+    color: $colors-red-red-700;
+  }
+  .textColor-red-600 {
+    color: $colors-red-red-600;
+  }
+  .textColor-red-500 {
+    color: $colors-red-red-500;
+  }
+  .textColor-red-400 {
+    color: $colors-red-red-400;
+  }
+  .textColor-red-300 {
+    color: $colors-red-red-300;
+  }
+  .textColor-red-primary-200 {
+    color: $colors-red-primary-200;
+  }
+  .textColor-red-primary-50 {
+    color: $colors-red-primary-50;
+  }
+
+  // Cores cinzas
+  .textColor-gray-900 {
+    color: $colors-gray-gray-900;
+  }
+  .textColor-gray-800 {
+    color: $colors-gray-gray-800;
+  }
+  .textColor-gray-700 {
+    color: $colors-gray-gray-700;
+  }
+  .textColor-gray-600 {
+    color: $colors-gray-gray-600;
+  }
+  .textColor-gray-500 {
+    color: $colors-gray-gray-500;
+  }
+  .textColor-gray-400 {
+    color: $colors-gray-gray-400;
+  }
+  .textColor-gray-300 {
+    color: $colors-gray-gray-300;
+  }
+  .textColor-gray-200 {
+    color: $colors-gray-gray-200;
+  }
+  .textColor-gray-50 {
+    color: $colors-gray-gray-50;
+  }
+
+  // Cores preta e branca
+  .textColor-black-900 {
+    color: $colors-black-black-900;
+  }
+
+  .textColor-white {
+    color: $colors-white-white;
+  }
+
+  // Woortext
+  .textColor-default {
+    color: $colors-gray-gray-900;
+  }
+  .textColor-secdefault {
+    color: $colors-gray-gray-600;
+  }
+  .textColor-dark {
+    color: $colors-primary-primary-900 ;
+  }
+  .textColor-light {
+    color: $colors-white-white;
+  }
+  .textColor-placeholder {
+    color: $colors-gray-gray-400;
+  }
+  .textColor-disabled {
+    color: $colors-gray-gray-400;
+  }
+  .textColor-primary {
+    color: $colors-primary-primary-500;
+  }
+  .textColor-secondary {
+    color: $colors-secondary-primary-500;
+  }
+  .textColor-danger {
+    color: $colors-red-red-500;
+  }
+  .textColor-warning {
+    color: $colors-yellow-yellow-500;
+  }
+  .textColor-success {
+    color: $colors-green-green-500;
+  }
+  .textColor-link {
+    color: $colors-blue-blue-500;
+  }
+  .textColor-link-selected {
+    color: $colors-blue-blue-800;
+  }

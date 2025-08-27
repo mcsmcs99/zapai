@@ -1,0 +1,72 @@
+div:where(.swal2-container).swal2-center>.swal2-popup {
+    border-radius: 16px !important;
+    z-index: 999999 !important;
+   }
+   div:where(.swal2-container) button:where(.swal2-styled).swal2-confirm {
+        display: flex !important;
+        height: 44px !important;
+        padding: 18px 32px !important;
+        justify-content: center !important;
+        align-items: center !important;
+        gap: 8px !important;
+        border-radius: 8px !important;
+        background:  $colors-primary-primary-500 !important;
+        overflow: hidden;
+        color:  $colors-white-white;
+        text-overflow: ellipsis;
+
+        /* Text L/Medium - 16px */
+        font-family: Inter !important;
+        font-size: 16px !important;
+        font-style: normal !important;
+        font-weight: 500 !important;
+        line-height: 24px !important; /* 150% */
+        letter-spacing: -0.176px !important;
+   }
+   div:where(.swal2-container) h2:where(.swal2-title) {
+        color: $colors-gray-gray-900 !important;
+        text-align: center !important;
+
+        /* Text XL/Semibold - 20px */
+        font-family: Inter !important;
+        font-size: 20px !important;
+        font-style: normal !important;
+        font-weight: 600 !important;
+        line-height: 28px !important; /* 140% */
+        letter-spacing: -0.34px !important;
+   }
+   div:where(.swal2-container) div:where(.swal2-popup) {
+        color: $colors-gray-gray-900 !important;
+        text-align: center !important;
+
+        /* Text L/Regular - 16px */
+        font-family: Inter !important;
+        font-size: 16px !important;
+        font-style: normal !important;
+        font-weight: 400 !important;
+        line-height: 24px !important; /* 150% */
+        letter-spacing: -0.176px !important;
+   }
+   div:where(.swal2-icon).swal2-info {
+        border: 8px solid $colors-primary-primary-500 !important;
+        color:  $colors-primary-primary-500 !important;
+        font-weight: 900 !important;
+   }
+   div:where(.swal2-icon).swal2-warning {
+        border:8px solid $colors-yellow-yellow-500 !important;
+        color:  $colors-yellow-yellow-500 !important;
+        font-weight: 900 !important;
+   }
+   div:where(.swal2-icon).swal2-error {
+        border:8px solid $colors-red-red-500 !important;
+        color:  $colors-red-red-500 !important;
+        font-weight: 900 !important;
+
+   }
+   div:where(.swal2-icon).swal2-error [class^=swal2-x-mark-line] {
+        background-color:$colors-red-red-500 !important;
+        font-weight: 900 !important;
+   }
+   div:where(.swal2-container) .swal2-html-container {
+    font-size: 16px !important;
+   }
