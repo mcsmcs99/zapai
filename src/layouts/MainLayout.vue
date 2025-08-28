@@ -1,23 +1,12 @@
 <template>
   <q-layout view="lHh Lpr lFf">
-    <q-header elevated>
-      <q-toolbar>
-        <q-btn
-          flat
-          dense
-          round
-          icon="menu"
-          aria-label="Menu"
-          @click="toggleLeftDrawer"
-        />
-
-        <q-toolbar-title>
-          Quasar App
-        </q-toolbar-title>
-
-        <div>Quasar v{{ $q.version }}</div>
-      </q-toolbar>
-    </q-header>
+    <AppHeader
+      :title="'Dashboard'"
+      :user="{ name: 'Matheus Correia Dos Santos', email: 'mcsmatheusmcs99@gmail.com' }"
+      @toggle-left="toggleLeftDrawer"
+      @profile="$router.push('/perfil')"
+      @logout="logout()"
+    />
 
     <AppSidebar v-model="leftDrawerOpen" />
 
@@ -29,7 +18,8 @@
 
 <script setup>
 import { ref } from 'vue'
-import AppSidebar from 'components/Sidebar.vue'
+import AppSidebar from 'src/components/AppSidebar.vue'
+import AppHeader from 'src/components/AppHeader.vue'
 
 const leftDrawerOpen = ref(false)
 
