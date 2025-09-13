@@ -4,7 +4,7 @@
       :title="'Dashboard'"
       :user="{ name: 'Matheus Correia Dos Santos', email: 'mcsmatheusmcs99@gmail.com' }"
       @toggle-left="toggleLeftDrawer"
-      @profile="$router.push('/perfil')"
+      @profile="$router.push('/profile')"
       @logout="logout()"
     />
 

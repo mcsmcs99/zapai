@@ -92,15 +92,21 @@ const route = useRoute()
 const isActive = (to) => route.path === to || route.path.startsWith(to + '/')
 
 const main = [
-  { label: 'Dashboard',        icon: 'insights',              to: '/dashboard' },
-  { label: 'Meus Assistentes', icon: 'smart_toy',             to: '/assistentes' },
-  { label: 'Conversas',        icon: 'chat_bubble',           to: '/conversas' },
-  { label: 'Simulador',        icon: 'play_circle',           to: '/simulador' }
+  { label: 'Dashboard',              icon: 'insights',              to: '/dashboard' },
+  { label: 'Meus Assistentes',       icon: 'smart_toy',             to: '/assistants' },
+  { label: 'Conversas',              icon: 'chat_bubble',           to: '/conversations' },
+  { label: 'Agendamentos',           icon: 'calendar_month',        to: '/appointments' },
+  { label: 'Serviços',               icon: 'construction',          to: '/services' },
+  { label: 'Colaboradores',          icon: 'group',                 to: '/staff' },
+  { label: 'Receitas do negócio',    icon: 'attach_money',          to: '/business-revenues' },
+  { label: 'Assinatura de clientes', icon: 'autorenew',             to: '/client-subscriptions' },
+  { label: 'Simulador',              icon: 'play_circle',           to: '/simulator' }
 ]
 const admin = [
-  { label: 'Dashboard Admin',  icon: 'admin_panel_settings',  to: '/admin' },
-  { label: 'Empresas',         icon: 'apartment',             to: '/empresas' },
-  { label: 'Planos e Finanças',icon: 'payments',              to: '/planos' }
+  { label: 'Dashboard Admin',  icon: 'admin_panel_settings',  to: '/admin-dashboard' },
+  { label: 'Empresas',         icon: 'apartment',             to: '/companies' },
+  { label: 'Planos',           icon: 'loyalty',               to: '/plans' },
+  { label: 'Finanças',         icon: 'attach_money',          to: '/admin-finance' },
 ]
 </script>
 
