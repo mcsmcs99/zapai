@@ -14,6 +14,8 @@ const routes = [
       { path: '/business-revenues', component: () => import('pages/BusinessRevenues.vue') },
       { path: '/client-subscriptions', component: () => import('pages/ClientSubscriptions.vue') },
       { path: '/simulator', component: () => import('pages/SimulatorPage.vue') },
+      { path: '/my-subscription', component: () => import('pages/MySubscription.vue') },
+      { path: '/create-assistant', component: () => import('pages/CreateAssistantPage.vue') },
 
       { path: '/admin-dashboard', component: () => import('pages/AdminDashboard.vue') },
       { path: '/companies', component: () => import('pages/CompaniesPage.vue') },

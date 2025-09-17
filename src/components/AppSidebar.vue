@@ -73,7 +73,7 @@
         unelevated
         icon="add"
         label="Novo Assistente"
-        @click="$router.push('/assistentes/novo')"
+        @click="$router.push('/create-assistant')"
       />
     </div>
   </q-drawer>
@@ -100,7 +100,8 @@ const main = [
   { label: 'Colaboradores',          icon: 'group',                 to: '/staff' },
   { label: 'Receitas do negócio',    icon: 'attach_money',          to: '/business-revenues' },
   { label: 'Assinatura de clientes', icon: 'autorenew',             to: '/client-subscriptions' },
-  { label: 'Simulador',              icon: 'play_circle',           to: '/simulator' }
+  { label: 'Simulador',              icon: 'play_circle',           to: '/simulator' },
+  { label: 'Minha assinatura',       icon: 'wallet',                to: '/my-subscription' },
 ]
 const admin = [
   { label: 'Dashboard Admin',  icon: 'admin_panel_settings',  to: '/admin-dashboard' },
