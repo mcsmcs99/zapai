@@ -124,6 +124,7 @@ import { ref } from 'vue'
 import BuyTokensDialog from 'components/BuyTokensDialog.vue'
 import ChangePlanDialog from 'components/ChangePlanDialog.vue'
 import PaymentMethodDialog from 'components/PaymentMethodDialog.vue'
+import { useRouter } from 'vue-router'
 
 defineOptions({ name: 'MySubscriptionPage' })
 
@@ -180,10 +181,14 @@ const money = (v) => new Intl.NumberFormat('pt-BR', { style:'currency', currency
 
 const subscription = ref({ paymentMethod: 'card' })
 
+const router = useRouter()
+
 function handleCheckout (payload) {
   // payload: { qty, unit, subtotal, method, discount, total }
   // aqui você chama seu checkout/PIX/Cartão…
   console.log('checkout:', payload)
+  const p = encodeURIComponent(JSON.stringify(payload))
+  router.push({ name: 'checkout', query: { p } })
 }
 
 function handlePlanChange ({ id, plan }) {

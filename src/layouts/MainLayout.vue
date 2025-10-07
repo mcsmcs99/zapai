@@ -8,7 +8,7 @@
       @logout="logout()"
     />
 
-    <AppSidebar v-model="leftDrawerOpen" />
+    <AppSidebar v-if="!isCheckout" v-model="leftDrawerOpen" />
 
     <q-page-container>
       <router-view />
@@ -18,10 +18,17 @@
 
 <script setup>
 import { ref } from 'vue'
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import AppSidebar from 'src/components/AppSidebar.vue'
 import AppHeader from 'src/components/AppHeader.vue'
 
 const leftDrawerOpen = ref(false)
+
+const route = useRoute()
+const isCheckout = computed(() =>
+  route.name === 'checkout' || route.path.startsWith('/checkout')
+)
 
 function toggleLeftDrawer () {
   leftDrawerOpen.value = !leftDrawerOpen.value

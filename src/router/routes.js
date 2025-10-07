@@ -16,6 +16,7 @@ const routes = [
       { path: '/simulator', component: () => import('pages/SimulatorPage.vue') },
       { path: '/my-subscription', component: () => import('pages/MySubscription.vue') },
       { path: '/create-assistant', component: () => import('pages/CreateAssistantPage.vue') },
+      { path: '/checkout', name: 'checkout', component: () => import('pages/CheckoutPage.vue') },
 
       { path: '/admin-dashboard', component: () => import('pages/AdminDashboard.vue') },
       { path: '/companies', component: () => import('pages/CompaniesPage.vue') },
