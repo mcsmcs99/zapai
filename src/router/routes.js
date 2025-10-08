@@ -2,6 +2,7 @@ const routes = [
   {
     path: '/',
     component: () => import('layouts/MainLayout.vue'),
+    meta: { requiresAuth: true },
     children: [
       { path: '', component: () => import('pages/IndexPage.vue') },
       { path: '/profile', component: () => import('pages/ProfilePage.vue') },
@@ -22,6 +23,13 @@ const routes = [
       { path: '/companies', component: () => import('pages/CompaniesPage.vue') },
       { path: '/plans', component: () => import('pages/PlansPage.vue') },
       { path: '/admin-finance', component: () => import('pages/AdminFinance.vue') },
+    ]
+  },
+  {
+    path: '/',
+    component: () => import('layouts/AuthLayout.vue'),
+    children: [
+      { path: '/login', component: () => import('pages/LoginPage.vue') },
     ]
   },
 

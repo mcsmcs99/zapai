@@ -19,18 +19,23 @@
 <script setup>
 import { ref } from 'vue'
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AppSidebar from 'src/components/AppSidebar.vue'
 import AppHeader from 'src/components/AppHeader.vue'
 
 const leftDrawerOpen = ref(false)
 
 const route = useRoute()
+const router = useRouter()
+
 const isCheckout = computed(() =>
   route.name === 'checkout' || route.path.startsWith('/checkout')
 )
 
 function toggleLeftDrawer () {
   leftDrawerOpen.value = !leftDrawerOpen.value
+}
+function logout () {
+  router.replace({ path: '/login' })
 }
 </script>
