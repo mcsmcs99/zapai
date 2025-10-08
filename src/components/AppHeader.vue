@@ -8,16 +8,16 @@
         @click="$emit('toggle-left')"
       />
 
-      <!-- Título do topo (opcional) -->
+      <!-- Título -->
       <q-toolbar-title class="text-weight-medium">
-        {{ title }}
+        {{ props.title }}
       </q-toolbar-title>
 
-      <!-- Ações à direita (ex.: Testar IA / Novo Assistente) -->
+      <!-- Ações à direita -->
       <div class="row items-center no-wrap q-gutter-sm">
         <slot name="actions" />
 
-        <!-- Menu do usuário -->
+        <!-- Menu do usuário (dados vindos do store) -->
         <q-btn flat round dense>
           <q-avatar size="28px" color="primary" text-color="white">
             {{ userInitials }}
@@ -27,19 +27,19 @@
             <q-list style="min-width: 260px">
               <q-item>
                 <q-item-section>
-                  <div class="text-weight-medium">{{ user?.name }}</div>
-                  <div class="text-caption text-grey-7">{{ user?.email }}</div>
+                  <div class="text-weight-medium">{{ userName }}</div>
+                  <div class="text-caption text-grey-7">{{ userEmail }}</div>
                 </q-item-section>
               </q-item>
 
               <q-separator />
 
-              <q-item clickable @click="$emit('profile')">
+              <q-item clickable @click="goProfile">
                 <q-item-section avatar><q-icon name="person" /></q-item-section>
                 <q-item-section>Meu Perfil</q-item-section>
               </q-item>
 
-              <q-item clickable class="text-negative" @click="$emit('logout')">
+              <q-item clickable class="text-negative" @click="handleLogout">
                 <q-item-section avatar><q-icon name="logout" /></q-item-section>
                 <q-item-section>Sair</q-item-section>
               </q-item>
@@ -53,23 +53,38 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from 'src/stores/auth'
 
-defineOptions({ name: 'AppHeader' }) // evita erro ESLint multi-word
+defineOptions({ name: 'AppHeader' })
 
 const props = defineProps({
-  title: { type: String, default: 'WhatsApp AI' },
-  user: {
-    type: Object,
-    default: () => ({ name: 'Usuário', email: 'user@email.com' })
-  }
+  title: { type: String, default: 'WhatsApp AI' }
 })
 
+const router = useRouter()
+const auth = useAuthStore()
+
+// Dados do usuário do store (fallbacks amigáveis)
+const userName = computed(() => auth.user?.name || 'Usuário')
+const userEmail = computed(() => auth.user?.email || 'user@email.com')
+
 const userInitials = computed(() => {
-  const n = (props.user?.name || '').trim()
+  const n = userName.value.trim()
   if (!n) return 'U'
-  const parts = n.split(/\s+/).slice(0, 2)       // pega nome e sobrenome
+  const parts = n.split(/\s+/).slice(0, 2)
   return parts.map(p => p[0]?.toUpperCase()).join('') || 'U'
 })
+
+function goProfile () {
+  router.push({ path: '/profile' })
+}
+
+function handleLogout () {
+  // limpa token/usuário no store e volta para /login
+  auth.logout()
+  router.replace({ path: '/login' })
+}
 </script>
 
 <style scoped>

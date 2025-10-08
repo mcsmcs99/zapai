@@ -80,6 +80,7 @@
                     label="E-mail"
                     dense
                     outlined
+                    :disable="auth.loading"
                     :rules="[rules.required]"
                     autocomplete="email"
                     lazy-rules="ondemand"
@@ -93,9 +94,11 @@
                     label="Senha"
                     dense
                     outlined
+                    :disable="auth.loading"
                     :rules="[rules.required]"
                     autocomplete="current-password"
                     lazy-rules="ondemand"
+                    @keyup.enter="onSubmit"
                   >
                     <template #prepend><q-icon name="lock" /></template>
                     <template #append>
@@ -108,8 +111,8 @@
                   </q-input>
 
                   <div class="row items-center justify-between">
-                    <q-checkbox v-model="form.remember" label="Manter conectado" dense />
-                    <q-btn flat size="sm" color="primary" label="Esqueci minha senha" @click="onForgot" />
+                    <q-checkbox v-model="form.remember" label="Manter conectado" dense :disable="auth.loading" />
+                    <q-btn flat size="sm" color="primary" label="Esqueci minha senha" @click="onForgot" :disable="auth.loading" />
                   </div>
 
                   <q-btn
@@ -118,7 +121,7 @@
                     label="Entrar"
                     class="full-width"
                     unelevated
-                    :loading="loading"
+                    :loading="auth.loading"
                   >
                     <template #loading>
                       <q-spinner class="q-mr-sm" /> Entrando...
@@ -127,7 +130,7 @@
 
                   <q-separator spaced />
 
-                  <q-btn outline class="full-width" color="primary" @click="onGoogle">
+                  <q-btn outline class="full-width" color="primary" @click="onGoogle" :disable="auth.loading">
                     <q-icon name="logo_google" class="q-mr-sm" />
                     Entrar com Google
                   </q-btn>
@@ -135,7 +138,7 @@
                   <div class="row justify-center q-mt-sm">
                     <span class="text-caption">
                       Não tem conta?
-                      <q-btn flat size="sm" color="primary" label="Criar conta" @click="onCreate" />
+                      <q-btn flat size="sm" color="primary" label="Criar conta" @click="onCreate" :disable="auth.loading" />
                     </span>
                   </div>
                 </div>
@@ -155,9 +158,13 @@
 <script setup>
 import { reactive, ref } from 'vue'
 import { useQuasar } from 'quasar'
+import { useAuthStore } from 'src/stores/auth'
+import { useRouter } from 'vue-router'
 
+const router = useRouter()
 const $q = useQuasar()
-const loading = ref(false)
+const auth = useAuthStore()
+
 const showPass = ref(false)
 const formRef = ref(null)
 
@@ -175,16 +182,15 @@ async function onSubmit () {
   const ok = await formRef.value.validate()
   if (!ok) return
 
-  loading.value = true
   try {
-    // Chamada real de login aqui
-    await new Promise(r => setTimeout(r, 800))
-    $q.notify({ type: 'positive', message: 'Login realizado com sucesso!' })
-    // router.push({ name: 'dashboard' })
+    const ok = await auth.login({
+      email: form.email,
+      password: form.password
+    })
+    if (ok) router.push({ name: 'dashboard' })
   } catch {
-    $q.notify({ type: 'negative', message: 'Credenciais inválidas' })
-  } finally {
-    loading.value = false
+    // Notify já é feito no store; aqui é só para garantir UX
+    $q.notify({ type: 'negative', message: 'Não foi possível autenticar.' })
   }
 }
 
