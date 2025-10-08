@@ -2,7 +2,7 @@
   "name": "zapai",
   "version": "0.0.1",
   "description": "A Quasar Project",
-  "productName": "Quasar App",
+  "productName": "ZapAi",
   "author": "Matheus Correia dos Santos <mcsmatheusmcs99@gmail.com>",
   "type": "module",
   "private": true,

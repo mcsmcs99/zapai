@@ -22,7 +22,7 @@ export default defineRouter(function ({ store }) {
     const auth = useAuthStore(store)
     const needsAuth = to.matched.some(r => r.meta?.requiresAuth)
     if (needsAuth && !auth.isAuthenticated) {
-      return { path: '/login', query: { redirect: to.fullPath } }
+      return { path: '/login' }
     }
   })
 
