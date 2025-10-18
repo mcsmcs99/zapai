@@ -201,7 +201,7 @@ function onReset () {
 }
 
 function onForgot () {
-  $q.notify({ message: 'Fluxo de recuperação de senha', color: 'primary' })
+  router.push({ path: '/forgot-password' })
 }
 
 function onGoogle () {

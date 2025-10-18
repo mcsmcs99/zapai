@@ -31,22 +31,54 @@ export const useAuthStore = defineStore('auth', {
       localStorage.removeItem('auth_user')
     },
 
-    // >>> retorna { ok, token?, user?, error? }
+    // Login
     async login({ email, password }) {
       this.loading = true
       try {
         const { data } = await api.post('/auth/login', { email, password })
         const token = data?.token || data?.access_token
-        if (!token) {
-          throw new Error('Token não recebido do servidor')
-        }
+        if (!token) throw new Error('Token não recebido do servidor')
 
         this._saveSession(token, data?.user || null)
         Notify.create({ type: 'positive', message: 'Login realizado com sucesso!' })
-
         return { ok: true, token, user: this.user || null }
       } catch (err) {
         const msg = err?.response?.data?.message || 'Credenciais inválidas'
+        console.error(err)
+        Notify.create({ type: 'negative', message: msg })
+        return { ok: false, error: msg }
+      } finally {
+        this.loading = false
+      }
+    },
+
+    // --- NOVO: solicitar recuperação de senha (Forgot Password) ---
+    async forgotPassword(email) {
+      this.loading = true
+      try {
+        await api.post('/auth/forgot-password', { email })
+        // Backend responde sempre genérico por segurança
+        Notify.create({ type: 'positive', message: 'Se o e-mail existir, enviaremos um link de recuperação.' })
+        return { ok: true }
+      } catch (err) {
+        // Mesmo em erro de rede, mantenha mensagem genérica
+        console.error(err)
+        Notify.create({ type: 'positive', message: 'Se o e-mail existir, enviaremos um link de recuperação.' })
+        return { ok: false, error: 'Não foi possível processar agora.' }
+      } finally {
+        this.loading = false
+      }
+    },
+
+    // --- NOVO: redefinir senha com token ---
+    async resetPassword({ token, password }) {
+      this.loading = true
+      try {
+        await api.post('/auth/reset-password', { token, password })
+        Notify.create({ type: 'positive', message: 'Senha redefinida com sucesso!' })
+        return { ok: true }
+      } catch (err) {
+        const msg = err?.response?.data?.message || 'Token inválido ou expirado.'
         console.error(err)
         Notify.create({ type: 'negative', message: msg })
         return { ok: false, error: msg }
