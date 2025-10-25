@@ -209,7 +209,7 @@ function onGoogle () {
 }
 
 function onCreate () {
-  $q.notify({ message: 'Ir para cadastro', color: 'primary' })
+  router.push({ path: '/register' })
 }
 </script>
 

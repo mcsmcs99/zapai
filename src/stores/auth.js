@@ -31,6 +31,37 @@ export const useAuthStore = defineStore('auth', {
       localStorage.removeItem('auth_user')
     },
 
+    // ===== Cadastro (CRIAR CONTA) =====
+    // payload esperado: { name, email, password, ... }
+    // retorna { ok: true } em sucesso; se a API devolver token/user já salva a sessão
+    async register(payload) {
+      this.loading = true
+      try {
+        const { data } = await api.post('/auth/register', payload)
+
+        // Tente capturar token/user se sua API já logar o usuário ao cadastrar
+        const token = data?.token || data?.access_token
+        const user  = data?.user || null
+
+        if (token) {
+          this._saveSession(token, user || null)
+          Notify.create({ type: 'positive', message: 'Conta criada e sessão iniciada!' })
+          return { ok: true, token, user: this.user || null, autoLogged: true }
+        }
+
+        // Se não veio token, apenas confirma o cadastro
+        Notify.create({ type: 'positive', message: 'Conta criada! Faça login para continuar.' })
+        return { ok: true, autoLogged: false }
+      } catch (err) {
+        const msg = err?.response?.data?.message || 'Não foi possível criar a conta.'
+        console.error(err)
+        Notify.create({ type: 'negative', message: msg })
+        return { ok: false, error: msg }
+      } finally {
+        this.loading = false
+      }
+    },
+
     // Login
     async login({ email, password }) {
       this.loading = true
