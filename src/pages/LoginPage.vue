@@ -130,11 +130,6 @@
 
                   <q-separator spaced />
 
-                  <q-btn outline class="full-width" color="primary" @click="onGoogle" :disable="auth.loading">
-                    <q-icon name="logo_google" class="q-mr-sm" />
-                    Entrar com Google
-                  </q-btn>
-
                   <div class="row justify-center q-mt-sm">
                     <span class="text-caption">
                       Não tem conta?
@@ -272,10 +267,6 @@ function onReset () {
 
 function onForgot () {
   router.push({ path: '/forgot-password' })
-}
-
-function onGoogle () {
-  $q.notify({ message: 'Iniciando OAuth Google…', color: 'primary' })
 }
 
 function onCreate () {
