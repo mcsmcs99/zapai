@@ -74,7 +74,22 @@ export const useAuthStore = defineStore('auth', {
         Notify.create({ type: 'positive', message: 'Login realizado com sucesso!' })
         return { ok: true, token, user: this.user || null }
       } catch (err) {
-        const msg = err?.response?.data?.message || 'Credenciais inválidas'
+        const resp = err?.response
+        const code = resp?.data?.error_code
+
+        // 🚧 Conta pendente de verificação de e-mail
+        if (resp?.status === 403 && code === 'EMAIL_VERIFICATION_REQUIRED') {
+          const message = resp?.data?.message || 'Validação de e-mail pendente.'
+          Notify.create({ type: 'warning', message })
+          return {
+            ok: false,
+            needsVerification: true,
+            error: message
+          }
+        }
+
+        // Erros padrão
+        const msg = resp?.data?.message || 'Credenciais inválidas'
         console.error(err)
         Notify.create({ type: 'negative', message: msg })
         return { ok: false, error: msg }
@@ -82,6 +97,24 @@ export const useAuthStore = defineStore('auth', {
         this.loading = false
       }
     },
+
+    // opcional no mesmo store: reenvio do código
+    async resendVerification(email) {
+      if (!email) {
+        Notify.create({ type: 'warning', message: 'email para reenvio ausente.' })
+        return { ok: false }
+      }
+      try {
+        const { data } = await api.post('/auth/resend-verification', { email: email })
+        Notify.create({ type: 'positive', message: data?.message || 'Código reenviado. Verifique seu e-mail.' })
+        return { ok: true , token: data?.token}
+      } catch (err) {
+        const msg = err?.response?.data?.message || 'Não foi possível reenviar o código.'
+        Notify.create({ type: 'negative', message: msg })
+        return { ok: false, error: msg }
+      }
+    },
+
 
     // --- NOVO: solicitar recuperação de senha (Forgot Password) ---
     async forgotPassword(email) {
@@ -107,6 +140,22 @@ export const useAuthStore = defineStore('auth', {
       try {
         await api.post('/auth/reset-password', { token, password })
         Notify.create({ type: 'positive', message: 'Senha redefinida com sucesso!' })
+        return { ok: true }
+      } catch (err) {
+        const msg = err?.response?.data?.message || 'Token inválido ou expirado.'
+        console.error(err)
+        Notify.create({ type: 'negative', message: msg })
+        return { ok: false, error: msg }
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async validateAccount({ token, code }) {
+      this.loading = true
+      try {
+        await api.post('/auth/validate-account', { token, code })
+        Notify.create({ type: 'positive', message: 'Conta validada com sucesso!' })
         return { ok: true }
       } catch (err) {
         const msg = err?.response?.data?.message || 'Token inválido ou expirado.'

@@ -76,7 +76,7 @@
                     label="Senha"
                     dense outlined
                     :disable="loading"
-                    :rules="[rules.required, rules.min6]"
+                    :rules="[rules.required, rules.strongPassword]"
                     autocomplete="new-password"
                     lazy-rules="ondemand"
                   >
@@ -162,8 +162,17 @@ const form = reactive({
 const rules = {
   required: v => (!!v || v === 0) || 'Campo obrigatório',
   email: v => /.+@.+\..+/.test(v) || 'E-mail inválido',
-  min6: v => String(v || '').length >= 6 || 'Mínimo de 6 caracteres',
-  min3: v => String(v || '').length >= 3 || 'Mínimo de 3 caracteres'
+  min3: v => String(v || '').length >= 3 || 'Mínimo de 3 caracteres',
+  strongPassword: v => {
+    const s = String(v || '');
+    if (s.length < 8)         return 'A senha deve ter no mínimo 8 caracteres';
+    if (!/[a-z]/.test(s))     return 'Inclua pelo menos 1 letra minúscula';
+    if (!/[A-Z]/.test(s))     return 'Inclua pelo menos 1 letra maiúscula';
+    if (!/\d/.test(s))        return 'Inclua pelo menos 1 número';
+    if (!/[^\w\s]/.test(s))   return 'Inclua pelo menos 1 símbolo (ex.: !@#$%)';
+    if (/\s/.test(s))         return 'A senha não pode conter espaços';
+    return true;
+  }
 }
 const samePassword = v => v === form.password || 'As senhas não conferem'
 

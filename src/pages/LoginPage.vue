@@ -153,6 +153,43 @@
       </div>
     </div>
   </q-page>
+  <!-- Modal de confirmação de reenvio -->
+  <q-dialog v-model="dlgResend.open" persistent>
+    <q-card style="max-width:500px;width:100%; overflow: visible;">
+      <q-card-section class="row items-center q-gutter-sm">
+        <q-avatar color="warning" text-color="black" icon="mark_email_unread" />
+        <div class="text-h6">Verificação pendente</div>
+      </q-card-section>
+
+      <q-card-section class="q-pt-none">
+        Seu e-mail ainda não foi verificado. Deseja reenviar o código agora?
+      </q-card-section>
+
+      <q-separator />
+
+      <q-card-actions align="right">
+        <q-btn flat label="Agora não" color="grey-7" v-close-popup :disable="dlgResend.loading" />
+        <q-btn
+          unelevated
+          color="primary"
+          label="Enviar"
+          :disable="dlgResend.loading"
+          :loading="dlgResend.loading"
+          @click="confirmResend"
+          :style="dlgResend.loading ? { width: '130px' } : null"
+        >
+          <template #loading>
+            <div class="flex">
+              <q-spinner class="q-mr-sm" />
+              <span>
+                Enviando...
+              </span>
+            </div>
+          </template>
+        </q-btn>
+      </q-card-actions>
+    </q-card>
+  </q-dialog>
 </template>
 
 <script setup>
@@ -167,6 +204,8 @@ const auth = useAuthStore()
 
 const showPass = ref(false)
 const formRef = ref(null)
+
+const dlgResend = ref({ open: false, loading: false })
 
 const form = reactive({
   email: '',
@@ -183,14 +222,45 @@ async function onSubmit () {
   if (!ok) return
 
   try {
-    const ok = await auth.login({
+    const res = await auth.login({
       email: form.email,
       password: form.password
     })
-    if (ok) router.push({ name: 'dashboard' })
-  } catch {
+
+    if (res.ok) {
+      router.push({ name: 'dashboard' })
+      return
+    }
+
+    // 🚧 pendente de verificação → abre modal
+    if (res.needsVerification) {
+      dlgResend.value.open = true
+      dlgResend.value.email = form.email
+      return
+    }
+
+    // demais erros já notificados no store
+  }  catch {
     // Notify já é feito no store; aqui é só para garantir UX
     $q.notify({ type: 'negative', message: 'Não foi possível autenticar.' })
+  }
+}
+
+async function confirmResend () {
+  if (!dlgResend.value.email) {
+    dlgResend.value.open = false
+    return
+  }
+  dlgResend.value.loading = true
+  const r = await auth.resendVerification(dlgResend.value.email)
+  dlgResend.value.loading = false
+
+  if (r?.ok) {
+    dlgResend.value.open = false
+    if (r?.token) {
+      console.log(r.token)
+      router.push({ path: '/validate-account', query: { token: r.token } })
+    }
   }
 }
 
