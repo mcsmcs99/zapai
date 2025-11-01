@@ -1,21 +1,97 @@
 <template>
   <q-form @submit.prevent="onSubmit" ref="formRef" class="q-gutter-md">
     <div class="row q-col-gutter-md">
-      <q-input class="col-12 col-md-6" v-model="ob.company.unique_key" label="Identificador (slug)" :rules="[req]" outlined dense />
-      <q-select class="col-12 col-md-6" v-model="ob.company.document_type" :options="docTypes" label="Tipo de documento" :rules="[req]" outlined dense />
-      <q-input class="col-12 col-md-6" v-model="ob.company.document_number" label="Número do documento" :rules="[req]" outlined dense />
-      <q-input class="col-12 col-md-6" v-model="ob.company.company_name" label="Razão social" :rules="[req]" outlined dense />
-      <q-input class="col-12 col-md-6" v-model="ob.company.company_fantasy_name" label="Nome fantasia" outlined dense />
-      <q-input class="col-12 col-md-6" v-model="ob.company.phone_fix" label="Telefone fixo" outlined dense />
-      <q-input class="col-12 col-md-6" v-model="ob.company.phone_cellular" label="Celular" outlined dense />
-      <q-input class="col-12 col-md-6" v-model="ob.company.link_instagram" label="Instagram" outlined dense />
-      <q-input class="col-12 col-md-6" v-model="ob.company.link_facebook" label="Facebook" outlined dense />
-      <q-input class="col-12 col-md-6" v-model="ob.company.link_whatsapp" label="WhatsApp" outlined dense />
+
+      <q-input
+        class="col-12 col-md-6"
+        v-model="ob.company.company_name"
+        label="Razão social"
+        :rules="[req]"
+        outlined
+        dense
+        lazy-rules="ondemand"
+        hide-bottom-space
+      />
+
+      <q-input
+        class="col-12 col-md-6"
+        v-model="ob.company.company_fantasy_name"
+        label="Nome fantasia"
+        outlined
+        dense
+        lazy-rules="ondemand"
+        hide-bottom-space
+      />
+
+      <q-input
+        class="col-12 col-md-6"
+        v-model="ob.company.document_number"
+        label="CNPJ"
+        :mask="docMask"
+        fill-mask
+        outlined
+        dense
+        :rules="[req]"
+        lazy-rules="ondemand"
+        hide-bottom-space
+      />
+
+      <q-input
+        class="col-12 col-md-6"
+        v-model="ob.company.link_whatsapp"
+        label="WhatsApp"
+        :mask="whatsMask"
+        fill-mask
+        outlined
+        dense
+        :rules="[req]"
+        lazy-rules="ondemand"
+        hide-bottom-space
+      />
+
+      <q-input
+        class="col-12 col-md-6"
+        v-model="ob.company.link_instagram"
+        label="Link Instagram"
+        outlined
+        dense
+        lazy-rules="ondemand"
+        hide-bottom-space
+      />
+
+      <q-input
+        class="col-12 col-md-6"
+        v-model="ob.company.link_facebook"
+        label="Link Facebook"
+        outlined
+        dense
+        lazy-rules="ondemand"
+        hide-bottom-space
+      />
+
+      <q-input
+        class="col-12 col-md-6"
+        v-model="ob.company.phone_fix"
+        label="Telefone fixo"
+        :mask="phoneMask"
+        fill-mask
+        outlined
+        dense
+        lazy-rules="ondemand"
+        hide-bottom-space
+      />
+
     </div>
 
     <div class="row justify-between q-mt-md">
       <q-space />
-      <q-btn unelevated color="primary" :loading="loading" type="submit" label="Avançar" />
+      <q-btn
+        unelevated
+        color="primary"
+        :loading="loading"
+        type="submit"
+        label="Avançar"
+      />
     </div>
   </q-form>
 </template>
@@ -24,30 +100,33 @@
 import { ref } from 'vue'
 import { useQuasar } from 'quasar'
 import { useOnboardingStore } from 'src/stores/onboarding'
-// import api from 'src/services/api' // quando ligar com backend
+import { useMask } from 'src/composables/useMask'
 
 const $q = useQuasar()
 const ob = useOnboardingStore()
+const emit = defineEmits(['next', 'back'])
 
 const loading = ref(false)
 const formRef = ref(null)
-const docTypes = ['cpf', 'cnpj']
 const req = v => !!v || 'Obrigatório'
+
+// máscaras dinâmicas por região (Brasil, EUA, etc.)
+const { mask: docMask } = useMask('document')
+const { mask: whatsMask } = useMask('whatsapp')
+const { mask: phoneMask } = useMask('phone')
 
 async function onSubmit () {
   const ok = await formRef.value.validate()
   if (!ok) return
+
+  loading.value = true
   try {
-    loading.value = true
-    // chame sua API se quiser pré-criar a empresa aqui
-    // await api.post('/groups/draft', ob.company)
-    // ob.company.id = response.data.id
     emit('next')
   } catch (e) {
-    $q.notify({ type: 'negative', message: e?.response?.data?.message || 'Erro ao salvar.' })
+    console.error(e)
+    $q.notify({ type: 'negative', message: 'Erro ao continuar.' })
   } finally {
     loading.value = false
   }
 }
-const emit = defineEmits(['next', 'back'])
 </script>
