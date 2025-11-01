@@ -223,7 +223,11 @@ async function onSubmit () {
     })
 
     if (res.ok) {
-      router.push({ name: 'dashboard' })
+      if (res.user?.status === 'pending_group') {
+        router.replace({ name: 'onboarding-company' })
+      } else {
+        router.replace({ name: 'dashboard' })
+      }
       return
     }
 
