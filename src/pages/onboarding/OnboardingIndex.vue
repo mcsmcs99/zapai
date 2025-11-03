@@ -34,14 +34,17 @@ import StepPlan from './StepPlan.vue'
 import StepCheckout from './StepCheckout.vue'
 import { useOnboardingStore } from 'src/stores/onboarding'
 import { useAuthStore } from 'src/stores/auth'
+import { usePlansStore } from 'src/stores/plans'
 
 const router = useRouter()
 const ob = useOnboardingStore()
 const auth = useAuthStore()
+const plansStore = usePlansStore()
 
 // Restaura do sessionStorage ao abrir a página
-onMounted(() => {
+onMounted(async () => {
   ob.loadFromSession()
+  await plansStore.fetchPlans()
 })
 
 // Persiste qualquer alteração (step/company/plan)

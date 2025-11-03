@@ -2,10 +2,16 @@
   <div>
     <div class="text-subtitle1 q-mb-md">Escolha seu plano</div>
 
-    <div class="row q-col-gutter-lg">
+    <div class="q-my-md">
+      <q-skeleton v-if="plansStore.loading" type="QCard" height="180px" class="q-mb-md" />
+      <q-skeleton v-if="plansStore.loading" type="QCard" height="180px" class="q-mb-md" />
+      <q-skeleton v-if="plansStore.loading" type="QCard" height="180px" />
+    </div>
+
+    <div v-if="!plansStore.loading" class="row q-col-gutter-lg">
       <q-card
         v-for="p in plans"
-        :key="p.id"
+        :key="p.unique_key || p.id"
         bordered
         flat
         class="plan-card col-12 col-md-4"
@@ -14,10 +20,14 @@
         @keyup.enter.space="select(p)"
       >
         <!-- Cabeçalho -->
-        <div class="plan-header row items-center justify-between" :class="{ 'is-selected': ob.plan?.id === p.id }">
-          <div class="plan-title">{{ p.title }}</div>
+        <div
+          class="plan-header row items-center justify-between"
+          :class="{ 'is-selected': ob.plan?.id === p.id }"
+        >
+          <div class="plan-title">{{ p.name }}</div>
           <div class="row items-center q-gutter-xs">
-            <div v-if="p.popular" class="plan-badge">Popular</div>
+            <!-- badge opcional se quiser realçar o do meio -->
+            <div v-if="isMiddle(p)" class="plan-badge">Recomendado</div>
           </div>
         </div>
 
@@ -35,7 +45,7 @@
                 <q-icon name="smart_toy" class="q-mr-sm" />
                 <span>Assistentes IA</span>
               </div>
-              <strong>{{ p.assistantsLabel || p.assistants }}</strong>
+              <strong>{{ p.assistants ?? '-' }}</strong>
             </div>
           </div>
 
@@ -45,7 +55,7 @@
                 <q-icon name="chat_bubble" class="q-mr-sm" />
                 <span>Mensagens/mês</span>
               </div>
-              <strong>{{ p.messagesLabel || formatNumber(p.messages) }}</strong>
+              <strong>{{ formatNumber(p.messages) }}</strong>
             </div>
           </div>
 
@@ -56,13 +66,19 @@
           </div>
 
           <ul class="features q-mb-none">
-            <li v-for="(f, i) in p.features" :key="i">
+            <li v-for="(f, i) in featuresFromPlan(p)" :key="i">
               <q-icon name="circle" size="8px" class="q-mr-sm text-positive" />
               <span>{{ f }}</span>
             </li>
           </ul>
         </q-card-section>
       </q-card>
+    </div>
+
+    <div v-if="!plansStore.loading && !plans.length" class="q-mt-md">
+      <q-banner rounded class="bg-grey-2 text-grey-8">
+        Nenhum plano disponível no momento.
+      </q-banner>
     </div>
 
     <!-- Navegação -->
@@ -74,65 +90,54 @@
 </template>
 
 <script setup>
+import { onMounted, computed } from 'vue'
 import { useOnboardingStore } from 'src/stores/onboarding'
+import { usePlansStore } from 'src/stores/plans'
+
 const ob = useOnboardingStore()
+const plansStore = usePlansStore()
 const emit = defineEmits(['next','back'])
 
-const plans = [
-  {
-    id: 'basic',
-    title: 'Plano Básico',
-    price: 49.9,
-    assistants: 1,
-    messages: 500,
-    features: [
-      '1 Assistente IA',
-      '500 Mensagens/mês',
-      'Dashboard Básico',
-      'Suporte por Email'
-    ]
-  },
-  {
-    id: 'pro',
-    title: 'Plano Profissional',
-    price: 99.9,
-    assistants: 5,
-    messages: 2500,
-    popular: true,
-    features: [
-      '5 Assistentes IA',
-      '2.500 Mensagens/mês',
-      'Dashboard Avançado',
-      'Relatórios',
-      'Suporte Prioritário'
-    ]
-  },
-  {
-    id: 'enterprise',
-    title: 'Plano Enterprise',
-    price: 0, // “Sob consulta”
-    assistantsLabel: 'Ilimitado*',
-    messagesLabel: 'Sob demanda',
-    features: [
-      'Assistentes e Mensagens sob demanda',
-      'SLA e Suporte dedicado',
-      'Integrações personalizadas',
-      'Gestão de contas e consultoria'
-    ]
-  }
-]
+onMounted(() => {
+  // carrega da API (rota /plans com auth)
+  plansStore.fetchPlans()
+})
+
+const plans = computed(() => plansStore.items || [])
 
 function select (p) {
   ob.plan = p
 }
 
 function formatBRL (n) {
+  if (typeof n !== 'number') return n
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
 function formatNumber (n) {
   if (typeof n !== 'number') return n
   return n.toLocaleString('pt-BR')
+}
+
+function isMiddle (p) {
+  // só para dar destaque no "do meio" quando houver 3 itens
+  const arr = plans.value
+  if (!arr?.length) return false
+  const mid = Math.floor(arr.length / 2)
+  return arr[mid]?.id === p.id
+}
+
+function featuresFromPlan (p) {
+  const base = [
+    `${p.assistants ?? '-'} Assistente(s) IA`,
+    `${formatNumber(p.messages)} Mensagens/mês`,
+    'Dashboard',
+    'Relatórios básicos'
+  ]
+  if (p.price === 0) {
+    base.push('SLA e integrações sob consulta')
+  }
+  return base
 }
 </script>
 
@@ -172,16 +177,6 @@ function formatNumber (n) {
   background: #f3e5f5;
   padding: 4px 8px;
   border-radius: 999px;
-}
-.selected-chip {
-  display: inline-flex;
-  align-items: center;
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: #e3f2fd;
-  color: var(--q-color-primary);
-  border: 1px solid rgba(33,150,243,.25);
 }
 
 .price {
