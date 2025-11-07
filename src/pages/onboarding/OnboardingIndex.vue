@@ -72,16 +72,11 @@ function goNext () { if (step.value < 3) step.value++ }
 function goBack () { if (step.value > 1) step.value-- }
 
 async function finishWizard () {
-  // ÚNICO lugar que chama o backend
-  const payload = {
-    company: ob.company,
-    plan: ob.plan
-  }
-  console.log(payload)// ajuste endpoint
   // sucesso: limpa sessão e libera o app
+  await ob.finalizeCheckout()
+  await auth.fetchUser(auth.user.id)
   ob.clearSession()
   ob.reset()
-  await auth.refreshMe?.()
   router.replace({ name: 'dashboard' })
 }
 </script>

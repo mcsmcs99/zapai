@@ -26,7 +26,7 @@ const ob = useOnboardingStore()
 const emit = defineEmits(['finish','back'])
 
 const payment = ref({ type: 'pix' })
-const payTypes = ['pix','credit_card','boleto']
+const payTypes = ['credit_card', 'pix', 'billet']
 const loading = ref(false)
 
 async function onPay () {
