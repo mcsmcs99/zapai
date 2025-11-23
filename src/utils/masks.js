@@ -1,24 +1,33 @@
 // src/utils/masks.js
-import { getRegion } from './region'
 
-export function getMask(type) {
-  const region = getRegion()?.toUpperCase() || 'BR'
+export function getMask(type, region = 'BR') {
+  const r = (region || 'BR').toUpperCase()
 
   switch (type) {
     case 'document':
-      if (region === 'BR') return '##.###.###/####-##' // CNPJ
-      if (region === 'US') return '##-#######'         // EIN (exemplo EUA)
-      return '##############'
+      // específicos
+      if (r === 'BR') return '##.###.###/####-##' // CNPJ
+      if (r === 'US') return '##-#######'         // EIN (exemplo EUA)
+
+      // genérico para qualquer outro país (até 20 dígitos)
+      return '####################'
 
     case 'phone':
-      if (region === 'BR') return '(##) ####-####'
-      if (region === 'US') return '(###) ###-####'
-      return '#############'
+      // específicos
+      if (r === 'BR') return '(##) ####-####'
+      if (r === 'US') return '(###) ###-####'
+
+      // genérico internacional: + e até 15 dígitos (E.164)
+      // usuário digita o código do país e o número
+      return '+###############'
 
     case 'whatsapp':
-      if (region === 'BR') return '(##) #####-####'
-      if (region === 'US') return '+1 (###) ###-####'
-      return '#############'
+      // específicos
+      if (r === 'BR') return '(##) #####-####'
+      if (r === 'US') return '+1 (###) ###-####'
+
+      // genérico internacional (mesma lógica do phone)
+      return '+###############'
 
     default:
       return ''

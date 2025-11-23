@@ -119,11 +119,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useQuasar } from 'quasar'
 import { useOnboardingStore } from 'src/stores/onboarding'
 import { useMask } from 'src/composables/useMask'
 import { useCountriesStore } from 'src/stores/countries'
+import { getRegionFromCountryName } from 'src/utils/region-from-country'
 
 const $q = useQuasar()
 const ob = useOnboardingStore()
@@ -133,17 +134,28 @@ const loading = ref(false)
 const formRef = ref(null)
 const req = v => !!v || 'Obrigatório'
 
-// máscaras dinâmicas por região (Brasil, EUA, etc.)
-const { mask: docMask } = useMask('document')
-const { mask: whatsMask } = useMask('whatsapp')
-const { mask: phoneMask } = useMask('phone')
-
 // --- countries store ---
 const countriesStore = useCountriesStore()
 
 // lista completa e lista filtrada para o select
 const allCountries = ref([])
 const countryOptions = ref([])
+
+// país atual (objeto) baseado no country_id
+const currentCountry = computed(() => {
+  if (!ob.company.country_id || !allCountries.value.length) return null
+  return allCountries.value.find(c => c.id === ob.company.country_id) || null
+})
+
+// região derivada do país (por enquanto BR/US, mas dá pra expandir fácil)
+const currentRegion = computed(() => {
+  return getRegionFromCountryName(currentCountry.value?.name)
+})
+
+// máscaras dinâmicas com base na região derivada do país
+const { mask: docMask } = useMask('document', currentRegion)
+const { mask: whatsMask } = useMask('whatsapp', currentRegion)
+const { mask: phoneMask } = useMask('phone', currentRegion)
 
 // carrega TODOS os países ao montar
 onMounted(async () => {
@@ -152,7 +164,7 @@ onMounted(async () => {
       status: 'active',
       order: 'name',
       dir: 'asc',
-      pageSize: 9999 // garante que a API possa retornar todos
+      pageSize: 9999
     })
   }
 
