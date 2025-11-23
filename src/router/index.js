@@ -42,7 +42,7 @@ export default defineRouter(function ({ store }) {
     }
 
     // 4) Usuário autenticado tentando ir pro login: redireciona
-    if (isAuthenticated && to.name === 'login') {
+    if (isAuthenticated && (to.name === 'login' || to.name == undefined)) {
       return { name: isPending ? 'onboarding-company' : 'dashboard' }
     }
 
