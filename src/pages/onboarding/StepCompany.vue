@@ -53,7 +53,7 @@
         fill-mask
         outlined
         dense
-        :rules="[req]"
+        :rules="[req, cnpjBrasilApiRule]"
         lazy-rules="ondemand"
         hide-bottom-space
       />
@@ -125,6 +125,7 @@ import { useOnboardingStore } from 'src/stores/onboarding'
 import { useMask } from 'src/composables/useMask'
 import { useCountriesStore } from 'src/stores/countries'
 import { getRegionFromCountryName } from 'src/utils/region-from-country'
+import { fetchCnpj } from 'src/services/brasilapi'
 
 const $q = useQuasar()
 const ob = useOnboardingStore()
@@ -156,6 +157,42 @@ const currentRegion = computed(() => {
 const { mask: docMask } = useMask('document', currentRegion)
 const { mask: whatsMask } = useMask('whatsapp', currentRegion)
 const { mask: phoneMask } = useMask('phone', currentRegion)
+
+// --- regra assíncrona para validar CNPJ na BrasilAPI ---
+const cnpjBrasilApiRule = async (value) => {
+  // Se não for BR, não valida na BrasilAPI
+  if (currentRegion.value !== 'BR') return true
+
+  const clean = (value || '').replace(/\D/g, '')
+
+  if (!clean) {
+    return 'Obrigatório'
+  }
+
+  if (clean.length !== 14) {
+    return 'CNPJ inválido'
+  }
+
+  try {
+    await fetchCnpj(clean)
+    return true
+  } catch (err) {
+    if (err.code === 'CNPJ_NOT_FOUND') {
+      return 'CNPJ não encontrado na base da Receita'
+    }
+
+    if (err.code === 'INVALID_CNPJ') {
+      return 'CNPJ inválido'
+    }
+
+    // erro genérico da API
+    $q.notify({
+      type: 'negative',
+      message: 'Erro ao validar CNPJ na BrasilAPI. Tente novamente.'
+    })
+    return 'Não foi possível validar o CNPJ'
+  }
+}
 
 // carrega TODOS os países ao montar
 onMounted(async () => {
