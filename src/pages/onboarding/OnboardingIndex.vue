@@ -43,7 +43,7 @@ const plansStore = usePlansStore()
 
 // Restaura do sessionStorage ao abrir a página
 onMounted(async () => {
-  ob.loadFromSession()
+  await ob.loadFromSession()
   await plansStore.fetchPlans()
 })
 

@@ -229,9 +229,17 @@ async function onSubmit () {
 
   loading.value = true
   try {
+    const result = await ob.saveCompany()
+
+    if (!result.ok) {
+      // store já deu Notify, só não avança
+      return
+    }
+
     emit('next')
   } catch (e) {
     console.error(e)
+    // fallback, só se algo estourar fora da action
     $q.notify({ type: 'negative', message: 'Erro ao continuar.' })
   } finally {
     loading.value = false
