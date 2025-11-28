@@ -22,6 +22,7 @@ export const useOnboardingStore = defineStore('onboarding', {
       link_facebook: '',
       link_whatsapp: '',
       tenant_id: null,
+      country_id: null,
       status: 'active'
     },
     plan: null,
