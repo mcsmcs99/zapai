@@ -225,6 +225,8 @@ async function onSubmit () {
     if (res.ok) {
       if (res.user?.status === 'pending_group') {
         router.replace({ name: 'onboarding-company' })
+      } else if (!res.user?.current_group_id){
+        router.replace({ name: 'select-group' })
       } else {
         router.replace({ name: 'dashboard' })
       }

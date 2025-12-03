@@ -26,13 +26,9 @@ const leftDrawerOpen = ref(false)
 const route = useRoute()
 const router = useRouter()
 
-const isCheckout = computed(() =>
-  route.name === 'checkout' || route.path.startsWith('/checkout')
-)
-
 // esconde no checkout e quando for rota de onboarding
 const hideSidebar = computed(() =>
-  isCheckout.value || route.name === 'onboarding-company' || route.meta?.onboarding === true
+  route.meta?.no_sidebar === true
 )
 
 // (opcional) título dinâmico

@@ -193,6 +193,41 @@ export const useAuthStore = defineStore('auth', {
       if (!silent) {
         Notify.create({ message: 'Sessão encerrada', color: 'primary' })
       }
+    },
+
+     // atualizar current_group_id do usuário logado
+    async updateCurrentGroup(currentGroupId) {
+      if (!this.userId) {
+        Notify.create({
+          type: 'negative',
+          message: 'Usuário não encontrado na sessão.'
+        })
+        return null
+      }
+
+      try {
+        const payload = { current_group_id: currentGroupId }
+        const { data } = await api.patch(`/users/${this.userId}/current-group`, payload)
+
+        // Atualiza store + localStorage com o user COMPLETO que veio da API
+        this.user = data
+        localStorage.setItem('auth_user', JSON.stringify(data))
+
+        Notify.create({
+          type: 'positive',
+          message: 'Empresa selecionada com sucesso.'
+        })
+
+        // retorna o user todo para quem chamou
+        return data
+      } catch (err) {
+        const msg =
+          err?.response?.data?.message ||
+          'Não foi possível atualizar a empresa atual.'
+        console.error(err)
+        Notify.create({ type: 'negative', message: msg })
+        return null
+      }
     }
   }
 })

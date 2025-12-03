@@ -20,7 +20,8 @@ export default defineRouter(function ({ store }) {
 
     const isAuthenticated = auth.isAuthenticated
     const isPending = auth.user?.status === 'pending_group'
-
+    const isNeedSelectgGroup = auth.user?.current_group_id === null
+    console.log(auth.user)
     const requiresAuth = to.matched.some(r => r.meta?.requiresAuth)
     const isOnboarding = to.matched.some(r => r.meta?.onboarding)
 
@@ -33,6 +34,12 @@ export default defineRouter(function ({ store }) {
     //    só pode acessar a rota de onboarding
     if (isAuthenticated && isPending && !isOnboarding) {
       return { name: 'onboarding-company' }
+    }
+
+    // 2) Usuário autenticado e sem empresa selecionada:
+    //    só pode acessar a rota de seleção de empresa
+    if (isAuthenticated && isNeedSelectgGroup && to.name !== 'select-group') {
+      return { name: 'select-group' }
     }
 
     // 3) Usuário autenticado e NÃO pendente:

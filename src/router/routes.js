@@ -17,7 +17,8 @@ const routes = [
       { path: '/my-subscription', name: 'my-subscription', component: () => import('pages/MySubscription.vue') },
       { path: '/create-assistant', name: 'create-assistant', component: () => import('pages/CreateAssistantPage.vue') },
       { path: '/checkout', name: 'checkout', component: () => import('pages/CheckoutPage.vue') },
-      { path: '/onboarding-company', name: 'onboarding-company', component: () => import('pages/onboarding/OnboardingIndex.vue'), meta: { onboarding: true } },
+      { path: '/onboarding-company', name: 'onboarding-company', component: () => import('pages/onboarding/OnboardingIndex.vue'), meta: { onboarding: true, no_sidebar: true } },
+      { path: '/select-group', name: 'select-group', component: () => import('pages/SelectCompany.vue'), meta: { no_sidebar: true } },
 
       { path: '/admin-dashboard', name: 'admin-dashboard', component: () => import('pages/AdminDashboard.vue') },
       { path: '/companies', name: 'companies', component: () => import('pages/CompaniesPage.vue') },
