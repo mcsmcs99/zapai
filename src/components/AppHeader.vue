@@ -39,6 +39,11 @@
                 <q-item-section>Meu Perfil</q-item-section>
               </q-item>
 
+              <q-item clickable @click="goSelecGroup">
+                <q-item-section avatar><q-icon name="change_circle" /></q-item-section>
+                <q-item-section>Mudar empresa</q-item-section>
+              </q-item>
+
               <q-item clickable class="text-negative" @click="handleLogout">
                 <q-item-section avatar><q-icon name="logout" /></q-item-section>
                 <q-item-section>Sair</q-item-section>
@@ -78,6 +83,10 @@ const userInitials = computed(() => {
 
 function goProfile () {
   router.push({ path: '/profile' })
+}
+
+function goSelecGroup () {
+  router.push({ path: '/select-group' })
 }
 
 function handleLogout () {
