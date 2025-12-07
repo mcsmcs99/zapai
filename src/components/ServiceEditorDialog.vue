@@ -1,5 +1,9 @@
 <template>
-  <q-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" persistent>
+  <q-dialog
+    :model-value="modelValue"
+    @update:model-value="$emit('update:modelValue', $event)"
+    persistent
+  >
     <q-card class="editor-card">
       <!-- Título -->
       <q-card-section class="row items-center q-gutter-sm">
@@ -15,16 +19,32 @@
       <!-- Conteúdo -->
       <q-form class="q-pa-md" @submit.prevent="onSubmit">
         <div class="q-pa-md rounded-borders bg-grey-1" style="border:1px solid #ECECEC">
+          <!-- Cabeçalho + status -->
           <div class="row items-center q-gutter-sm q-mb-md">
-            <q-icon name="content_cut" />
-            <div class="text-subtitle1 text-weight-bold">Novo Serviço</div>
+            <div class="row items-center q-gutter-sm">
+              <q-icon name="content_cut" />
+              <div class="text-subtitle1 text-weight-bold">Novo Serviço</div>
+            </div>
+
+            <q-space />
+
+            <!-- Toggle ativo / inativo -->
+            <q-toggle
+              v-model="local.status"
+              :true-value="'active'"
+              :false-value="'inactive'"
+              color="positive"
+              dense
+              :label="local.status === 'active' ? 'Ativo' : 'Inativo'"
+            />
           </div>
 
           <div class="row q-col-gutter-md">
             <q-input
               class="col-12 col-md-8"
               v-model="local.title"
-              outlined dense
+              outlined
+              dense
               label="Nome do Serviço *"
               placeholder="Ex: Corte Social, Barba, Manicure"
               :rules="[v => !!v || 'Informe o nome']"
@@ -33,8 +53,10 @@
               class="col-12 col-md-4"
               v-model.number="local.price"
               type="number"
-              min="0" step="0.01"
-              outlined dense
+              min="0"
+              step="0.01"
+              outlined
+              dense
               label="Preço (R$) *"
               :rules="[v => v >= 0 || 'Inválido']"
             />
@@ -43,7 +65,8 @@
               v-model.number="local.duration"
               type="number"
               min="1"
-              outlined dense
+              outlined
+              dense
               label="Duração (minutos) *"
               :rules="[v => v > 0 || 'Inválido']"
             />
@@ -51,7 +74,8 @@
               class="col-12"
               v-model="local.description"
               type="textarea"
-              autogrow outlined
+              autogrow
+              outlined
               label="Descrição"
               placeholder="Descrição detalhada do serviço..."
             />
@@ -62,13 +86,23 @@
             <div class="text-subtitle1 text-weight-bold q-mb-sm">
               Colaboradores que podem realizar este serviço
             </div>
-            <q-list bordered class="rounded-borders" style="max-height: 280px; overflow: auto;">
-              <q-item v-for="c in collaborators" :key="c.id" tag="label">
+            <q-list
+              bordered
+              class="rounded-borders"
+              style="max-height: 280px; overflow: auto;"
+            >
+              <q-item
+                v-for="c in collaborators"
+                :key="c.id"
+                tag="label"
+              >
                 <q-item-section side>
                   <q-checkbox v-model="local.collaboratorIds" :val="c.id" />
                 </q-item-section>
                 <q-item-section>
-                  <q-item-label class="text-weight-medium">{{ c.name }}</q-item-label>
+                  <q-item-label class="text-weight-medium">
+                    {{ c.name }}
+                  </q-item-label>
                   <q-item-label caption>{{ c.role }}</q-item-label>
                 </q-item-section>
               </q-item>
@@ -79,9 +113,12 @@
         <!-- Ações -->
         <div class="row justify-end q-gutter-sm q-mt-lg">
           <q-btn flat label="Cancelar" v-close-popup />
-          <q-btn color="primary" icon="save"
-                 :label="mode === 'create' ? 'Criar Serviço' : 'Salvar Alterações'"
-                 type="submit" />
+          <q-btn
+            color="primary"
+            icon="save"
+            :label="mode === 'create' ? 'Criar Serviço' : 'Salvar Alterações'"
+            type="submit"
+          />
         </div>
       </q-form>
     </q-card>
@@ -103,6 +140,7 @@ const props = defineProps({
       price: 0,
       duration: 30,
       description: '',
+      status: 'active',
       collaboratorIds: []
     })
   },
@@ -114,7 +152,11 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'save'])
 
 const local = reactive(JSON.parse(JSON.stringify(props.value)))
-watch(() => props.value, v => Object.assign(local, JSON.parse(JSON.stringify(v))))
+
+watch(
+  () => props.value,
+  v => Object.assign(local, JSON.parse(JSON.stringify(v)))
+)
 
 function onSubmit () {
   emit('save', JSON.parse(JSON.stringify(local)))
@@ -123,6 +165,14 @@ function onSubmit () {
 </script>
 
 <style scoped>
-.editor-card { min-width: 760px; max-width: 92vw; border-radius: 14px; }
-@media (max-width: 780px) { .editor-card { min-width: auto; } }
+.editor-card {
+  min-width: 760px;
+  max-width: 92vw;
+  border-radius: 14px;
+}
+@media (max-width: 780px) {
+  .editor-card {
+    min-width: auto;
+  }
+}
 </style>

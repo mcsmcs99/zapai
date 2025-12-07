@@ -9,12 +9,23 @@
         </div>
       </div>
 
-      <q-btn color="primary" icon="add" label="Novo Serviço" rounded unelevated @click="openCreate" />
+      <q-btn
+        color="primary"
+        icon="add"
+        label="Novo Serviço"
+        rounded
+        unelevated
+        @click="openCreate"
+      />
     </div>
 
     <!-- Grid de cards -->
     <div class="row q-col-gutter-xl q-mt-sm">
-      <div v-for="s in services" :key="s.id" class="col-12 col-sm-6 col-md-4">
+      <div
+        v-for="s in services"
+        :key="s.id"
+        class="col-12 col-sm-6 col-md-4"
+      >
         <q-card flat bordered class="service-card">
           <q-card-section class="row items-start no-wrap">
             <q-avatar size="44px" color="blue-6" text-color="white" rounded>
@@ -23,18 +34,44 @@
 
             <div class="q-ml-md col">
               <div class="row items-start">
-                <div class="text-subtitle1 text-weight-bold ellipsis">{{ s.title }}</div>
+                <div class="text-subtitle1 text-weight-bold ellipsis">
+                  {{ s.title }}
+                </div>
                 <q-space />
                 <q-btn flat round dense icon="more_vert">
                   <q-menu>
                     <q-list style="min-width: 160px">
                       <q-item clickable @click="openEdit(s)">
-                        <q-item-section avatar><q-icon name="edit" /></q-item-section>
+                        <q-item-section avatar>
+                          <q-icon name="edit" />
+                        </q-item-section>
                         <q-item-section>Editar</q-item-section>
                       </q-item>
+
+                      <q-item clickable @click="toggleActive(s)">
+                        <q-item-section avatar>
+                          <q-icon
+                            :name="
+                              s.status === 'active'
+                                ? 'pause'
+                                : 'play_arrow'
+                            "
+                          />
+                        </q-item-section>
+                        <q-item-section>
+                          {{ s.status === 'active' ? 'Desativar' : 'Ativar' }}
+                        </q-item-section>
+                      </q-item>
+
                       <q-separator />
-                      <q-item clickable class="text-negative" @click="confirmRemove(s)">
-                        <q-item-section avatar><q-icon name="delete" /></q-item-section>
+                      <q-item
+                        clickable
+                        class="text-negative"
+                        @click="confirmRemove(s)"
+                      >
+                        <q-item-section avatar>
+                          <q-icon name="delete" />
+                        </q-item-section>
                         <q-item-section>Excluir</q-item-section>
                       </q-item>
                     </q-list>
@@ -68,13 +105,17 @@
           <q-separator />
 
           <q-card-section>
-            <div class="text-caption text-grey-7 q-mb-xs">Colaboradores:</div>
-            <div v-if="s.collaboratorIds.length">
+            <div class="text-caption text-grey-7 q-mb-xs">
+              Colaboradores:
+            </div>
+            <div v-if="(s.collaborator_ids || []).length">
               <q-badge
-                v-for="(c) in mapCollaborators(s.collaboratorIds)"
+                v-for="c in mapCollaborators(s.collaborator_ids)"
                 :key="c.id"
                 class="q-mr-xs q-mb-xs"
-                color="indigo-1" text-color="indigo-10" rounded
+                color="indigo-1"
+                text-color="indigo-10"
+                rounded
                 :label="c.name"
               />
             </div>
@@ -106,7 +147,7 @@
     <ServiceEditorDialog
       v-model="dlg.open"
       :mode="dlg.mode"
-      :value="dlg.value"
+      :value="servicesStore.currentService"
       :collaborators="collaborators"
       @save="saveService"
     />
@@ -114,92 +155,103 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { reactive, computed, onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import ServiceEditorDialog from 'components/ServiceEditorDialog.vue'
+import { useServicesStore } from 'src/stores/tenant/services'
+import { useStaffStore } from 'src/stores/tenant/staff'
 
 defineOptions({ name: 'ServicesPage' })
 
-/* Colaboradores disponíveis (mock) — pode vir da sua API */
-const collaborators = ref([
-  { id: 1, name: 'Eduards',        role: 'Barbeiro' },
-  { id: 2, name: 'João Silva',     role: 'Barbeiro' },
-  { id: 3, name: 'Maria Santos',   role: 'Cabeleireira' },
-  { id: 4, name: 'Ana Costa',      role: 'Manicure e Pedicure' },
-  { id: 5, name: 'Pedro Oliveira', role: 'Barbeiro Especialista' },
-  { id: 6, name: 'Carla Mendes',   role: 'Esteticista' }
-])
+const servicesStore = useServicesStore()
+const staffStore = useStaffStore()
 
-/* Lista de serviços (mock) */
-const services = ref([
-  {
-    id: 1,
-    title: 'Corte Social Masculino',
-    price: 25, duration: 30,
-    description: 'Corte clássico masculino com acabamento e finalização',
-    collaboratorIds: []
-  },
-  {
-    id: 2,
-    title: 'Corte + Barba',
-    price: 40, duration: 45,
-    description: 'Corte completo com barba aparada e hidratação',
-    collaboratorIds: []
-  },
-  {
-    id: 3,
-    title: 'Barba Completa',
-    price: 20, duration: 25,
-    description: 'Aparar, modelar e hidratar a barba',
-    collaboratorIds: []
-  }
-])
+const { services } = storeToRefs(servicesStore)
+const { staff } = storeToRefs(staffStore)
+
+/* Colaboradores disponíveis = staff ativos do tenant */
+const collaborators = computed(() =>
+  (staff.value || []).filter(s => s.status === 'active')
+)
 
 /* Helpers */
-const currency = (v) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v || 0))
+const currency = v =>
+  new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(Number(v || 0))
 
-const mapCollaborators = (ids) =>
-  collaborators.value.filter(c => ids.includes(c.id))
+const mapCollaborators = ids =>
+  collaborators.value.filter(c => (ids || []).includes(c.id))
 
 /* Modal de criar/editar */
 const dlg = reactive({
   open: false,
-  mode: 'create', // 'create' | 'edit'
-  value: { id: null, title: '', price: 0, duration: 30, description: '', collaboratorIds: [] }
+  mode: 'create' // 'create' | 'edit'
 })
 
 function openCreate () {
   dlg.mode = 'create'
-  dlg.value = { id: null, title: '', price: 0, duration: 30, description: '', collaboratorIds: [] }
+  servicesStore.resetCurrentService()
   dlg.open = true
 }
+
 function openEdit (row) {
   dlg.mode = 'edit'
-  dlg.value = JSON.parse(JSON.stringify(row))
+  servicesStore.setCurrentService(row)
   dlg.open = true
 }
-function saveService (data) {
-  if (dlg.mode === 'create') {
-    const id = Math.max(0, ...services.value.map(s => s.id)) + 1
-    services.value.push({ ...data, id })
-  } else {
-    const i = services.value.findIndex(s => s.id === data.id)
-    if (i > -1) services.value[i] = { ...services.value[i], ...data }
+
+async function saveService (data) {
+  // Dialog já valida os campos e devolve o objeto local
+  servicesStore.setCurrentService(data)
+  const resp = await servicesStore.saveCurrentService()
+
+  if (resp.ok && dlg.mode === 'create') {
+    await servicesStore.fetchServices()
   }
 }
 
 /* Remover */
 const rm = reactive({ open: false, row: null })
-function confirmRemove (row) { rm.row = row; rm.open = true }
-function remove () {
-  services.value = services.value.filter(s => s.id !== rm.row.id)
-  rm.open = false
+
+function confirmRemove (row) {
+  rm.row = row
+  rm.open = true
 }
+
+async function remove () {
+  if (!rm.row) return
+  const resp = await servicesStore.deleteService(rm.row.id)
+  if (resp.ok) {
+    rm.open = false
+    rm.row = null
+    // se quiser garantir sync:
+    // await servicesStore.fetchServices()
+  }
+}
+
+/* Ativar / desativar */
+async function toggleActive (service) {
+  const newStatus = service.status === 'active' ? 'inactive' : 'active'
+  servicesStore.setCurrentService({ ...service, status: newStatus })
+  await servicesStore.saveCurrentService()
+}
+
+/* Lifecycle */
+onMounted(async () => {
+  servicesStore.loadFromSession()
+  await servicesStore.fetchServices()
+
+  // carrega colaboradores do tenant para vincular nos serviços
+  staffStore.loadFromSession?.()
+  await staffStore.fetchStaff()
+})
 </script>
 
 <style scoped>
 .service-card {
   border-radius: 14px;
-  box-shadow: 0 6px 16px rgba(0,0,0,.06);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
 }
 </style>

@@ -1,35 +1,19 @@
-// src/stores/tenant/staff.js
+// src/stores/tenant/services.js
 import { defineStore } from 'pinia'
 import { api } from 'src/boot/axios'
 import { Notify } from 'quasar'
 import { useAuthStore } from 'src/stores/auth'
 
-const KEY = 'staff_state'
+const KEY = 'services_state'
 
-function createDefaultSchedule () {
-  const baseOpen = { closed: false, intervals: [{ start: '08:30', end: '17:30' }] }
-  const baseSat = { closed: false, intervals: [{ start: '08:30', end: '15:00' }] }
-  const baseClosed = { closed: true, intervals: [] }
-
-  return {
-    mon: { ...baseOpen },
-    tue: { ...baseOpen },
-    wed: { ...baseOpen },
-    thu: { ...baseOpen },
-    fri: { ...baseOpen },
-    sat: { ...baseSat },
-    sun: { ...baseClosed }
-  }
-}
-
-export const useStaffStore = defineStore('staff', {
+export const useServicesStore = defineStore('services', {
   state: () => ({
     loadingList: false,
     loadingItem: false,
     saving: false,
     deleting: false,
 
-    staff: [], // lista de colaboradores
+    services: [], // lista de serviços
     meta: {
       total: 0,
       page: 1,
@@ -42,13 +26,14 @@ export const useStaffStore = defineStore('staff', {
       search: ''
     },
 
-    currentStaff: {
+    currentService: {
       id: null,
-      name: '',
-      role: '',
-      photoUrl: '',
+      title: '',
+      price: 0,
+      duration: 30,
+      description: '',
       status: 'active',
-      schedule: createDefaultSchedule()
+      collaboratorIds: [] // IDs de colaboradores que podem executar o serviço
     }
   }),
 
@@ -65,21 +50,22 @@ export const useStaffStore = defineStore('staff', {
     },
 
     // state helpers ------------------------------------
-    setCurrentStaffField (key, val) {
-      if (key in this.currentStaff) {
-        this.currentStaff[key] = val
+    setCurrentServiceField (key, val) {
+      if (key in this.currentService) {
+        this.currentService[key] = val
         this.saveToSession()
       }
     },
 
-    setCurrentStaff (staffData = {}) {
-      this.currentStaff = {
-        id: staffData.id ?? null,
-        name: staffData.name ?? '',
-        role: staffData.role ?? '',
-        photoUrl: staffData.photoUrl ?? '',
-        status: staffData.status || 'active',
-        schedule: staffData.schedule || createDefaultSchedule()
+    setCurrentService (serviceData = {}) {
+      this.currentService = {
+        id: serviceData.id ?? null,
+        title: serviceData.title ?? '',
+        price: serviceData.price ?? 0,
+        duration: serviceData.duration ?? 30,
+        description: serviceData.description ?? '',
+        status: serviceData.status || 'active',
+        collaboratorIds: serviceData.collaboratorIds || serviceData.collaborator_ids || []
       }
       this.saveToSession()
     },
@@ -101,14 +87,15 @@ export const useStaffStore = defineStore('staff', {
       this.saveToSession()
     },
 
-    resetCurrentStaff () {
-      this.currentStaff = {
+    resetCurrentService () {
+      this.currentService = {
         id: null,
-        name: '',
-        role: '',
-        photoUrl: '',
+        title: '',
+        price: 0,
+        duration: 30,
+        description: '',
         status: 'active',
-        schedule: createDefaultSchedule()
+        collaboratorIds: []
       }
       this.saveToSession()
     },
@@ -119,7 +106,7 @@ export const useStaffStore = defineStore('staff', {
       this.saving = false
       this.deleting = false
 
-      this.staff = []
+      this.services = []
       this.meta = {
         total: 0,
         page: 1,
@@ -132,7 +119,7 @@ export const useStaffStore = defineStore('staff', {
         search: ''
       }
 
-      this.resetCurrentStaff()
+      this.resetCurrentService()
       this.clearSession()
     },
 
@@ -141,7 +128,7 @@ export const useStaffStore = defineStore('staff', {
       const payload = {
         meta: this.meta,
         filters: this.filters,
-        currentStaff: this.currentStaff
+        currentService: this.currentService
       }
       sessionStorage.setItem(KEY, JSON.stringify(payload))
     },
@@ -164,14 +151,14 @@ export const useStaffStore = defineStore('staff', {
             ...data.filters
           }
         }
-        if (data.currentStaff) {
-          this.currentStaff = {
-            ...this.currentStaff,
-            ...data.currentStaff
+        if (data.currentService) {
+          this.currentService = {
+            ...this.currentService,
+            ...data.currentService
           }
         }
       } catch (e) {
-        console.error('Erro ao carregar staff_state da sessão', e)
+        console.error('Erro ao carregar services_state da sessão', e)
       }
     },
 
@@ -182,10 +169,10 @@ export const useStaffStore = defineStore('staff', {
     // CRUD ---------------------------------------------
 
     /**
-     * Lista colaboradores
+     * Lista serviços
      * Sempre inclui user_id e group_id (tenant) automaticamente
      */
-    async fetchStaff (params = {}) {
+    async fetchServices (params = {}) {
       this.loadingList = true
 
       try {
@@ -193,7 +180,7 @@ export const useStaffStore = defineStore('staff', {
         const groupId = this.getCurrentGroupId()
 
         if (!groupId) {
-          console.warn('Nenhum grupo selecionado ao listar colaboradores.')
+          console.warn('Nenhum grupo selecionado ao listar serviços.')
         }
 
         const query = {
@@ -209,16 +196,17 @@ export const useStaffStore = defineStore('staff', {
         if (status) query.status = status
         if (search) query.search = search
 
-        const { data } = await api.get('/tenant/staff', { params: query })
+        // ajuste aqui pra bater com tua API: /tenant/services
+        const { data } = await api.get('/tenant/services', { params: query })
 
-        this.staff = data.data || []
+        this.services = data.data || []
         if (data.meta) {
           this.meta = {
             ...this.meta,
             ...data.meta
           }
         } else {
-          this.meta.total = this.staff.length
+          this.meta.total = this.services.length
           this.meta.totalPages = 1
         }
 
@@ -226,10 +214,10 @@ export const useStaffStore = defineStore('staff', {
 
         return { ok: true, data }
       } catch (err) {
-        console.error('Erro ao buscar colaboradores:', err)
+        console.error('Erro ao buscar serviços:', err)
         const msg =
           err?.response?.data?.message ||
-          'Erro ao carregar lista de colaboradores.'
+          'Erro ao carregar lista de serviços.'
         Notify.create({ type: 'negative', message: msg })
         return { ok: false, error: msg }
       } finally {
@@ -238,12 +226,12 @@ export const useStaffStore = defineStore('staff', {
     },
 
     /**
-     * Busca um colaborador por ID
+     * Busca um serviço por ID
      * Sempre inclui user_id e group_id (tenant)
      */
-    async fetchStaffById (id) {
+    async fetchServiceById (id) {
       if (!id) {
-        return { ok: false, error: 'ID inválido para buscar colaborador.' }
+        return { ok: false, error: 'ID inválido para buscar serviço.' }
       }
 
       this.loadingItem = true
@@ -251,28 +239,29 @@ export const useStaffStore = defineStore('staff', {
         const userId = this.getCurrentUserId()
         const groupId = this.getCurrentGroupId()
 
-        const { data } = await api.get(`/tenant/staff/${id}`, {
+        const { data } = await api.get(`/tenant/services/${id}`, {
           params: { user_id: userId, group_id: groupId }
         })
 
-        this.currentStaff = {
-          ...this.currentStaff,
-          ...data
+        this.currentService = {
+          ...this.currentService,
+          ...data,
+          collaboratorIds: data.collaboratorIds || data.collaborator_ids || []
         }
 
-        const index = this.staff.findIndex(s => s.id === data.id)
+        const index = this.services.findIndex(s => s.id === data.id)
         if (index !== -1) {
-          this.staff.splice(index, 1, data)
+          this.services.splice(index, 1, data)
         }
 
         this.saveToSession()
 
         return { ok: true, data }
       } catch (err) {
-        console.error('Erro ao buscar colaborador por ID:', err)
+        console.error('Erro ao buscar serviço por ID:', err)
         const msg =
           err?.response?.data?.message ||
-          'Erro ao carregar dados do colaborador.'
+          'Erro ao carregar dados do serviço.'
         Notify.create({ type: 'negative', message: msg })
         return { ok: false, error: msg }
       } finally {
@@ -281,11 +270,11 @@ export const useStaffStore = defineStore('staff', {
     },
 
     /**
-     * Cria ou atualiza o currentStaff no backend
+     * Cria ou atualiza o currentService no backend
      * Sempre inclui user_id e group_id (tenant)
      */
-    async saveCurrentStaff () {
-      const isEdit = !!this.currentStaff.id
+    async saveCurrentService () {
+      const isEdit = !!this.currentService.id
 
       this.saving = true
       try {
@@ -293,13 +282,13 @@ export const useStaffStore = defineStore('staff', {
         const groupId = this.getCurrentGroupId()
 
         if (!groupId) {
-          const msg = 'Nenhum grupo selecionado para salvar colaborador.'
+          const msg = 'Nenhum grupo selecionado para salvar serviço.'
           Notify.create({ type: 'negative', message: msg })
           return { ok: false, error: msg }
         }
 
         const payload = {
-          ...this.currentStaff,
+          ...this.currentService,
           user_id: userId,
           group_id: groupId
         }
@@ -307,7 +296,7 @@ export const useStaffStore = defineStore('staff', {
         let resp
         if (isEdit) {
           resp = await api.put(
-            `/tenant/staff/${this.currentStaff.id}`,
+            `/tenant/services/${this.currentService.id}`,
             payload,
             {
               params: { user_id: userId, group_id: groupId }
@@ -315,7 +304,7 @@ export const useStaffStore = defineStore('staff', {
           )
         } else {
           resp = await api.post(
-            '/tenant/staff',
+            '/tenant/services',
             payload,
             {
               params: { user_id: userId, group_id: groupId }
@@ -325,34 +314,35 @@ export const useStaffStore = defineStore('staff', {
 
         const data = resp.data
 
-        this.currentStaff = {
-          ...this.currentStaff,
-          ...data
+        this.currentService = {
+          ...this.currentService,
+          ...data,
+          collaboratorIds: data.collaboratorIds || data.collaborator_ids || []
         }
 
-        const index = this.staff.findIndex(s => s.id === data.id)
+        const index = this.services.findIndex(s => s.id === data.id)
         if (index !== -1) {
-          this.staff.splice(index, 1, data)
+          this.services.splice(index, 1, data)
         } else {
-          this.staff.unshift(data)
+          this.services.unshift(data)
         }
 
         this.saveToSession()
         Notify.create({
           type: 'positive',
           message: isEdit
-            ? 'Colaborador atualizado com sucesso.'
-            : 'Colaborador criado com sucesso.'
+            ? 'Serviço atualizado com sucesso.'
+            : 'Serviço criado com sucesso.'
         })
 
         return { ok: true, data }
       } catch (err) {
-        console.error('Erro ao salvar colaborador:', err)
+        console.error('Erro ao salvar serviço:', err)
         const msg =
           err?.response?.data?.message ||
-          (this.currentStaff.id
-            ? 'Erro ao atualizar colaborador.'
-            : 'Erro ao criar colaborador.')
+          (this.currentService.id
+            ? 'Erro ao atualizar serviço.'
+            : 'Erro ao criar serviço.')
         Notify.create({ type: 'negative', message: msg })
         return { ok: false, error: msg }
       } finally {
@@ -361,12 +351,12 @@ export const useStaffStore = defineStore('staff', {
     },
 
     /**
-     * Remove um colaborador
+     * Remove um serviço
      * Sempre inclui user_id e group_id (tenant)
      */
-    async deleteStaff (id) {
+    async deleteService (id) {
       if (!id) {
-        return { ok: false, error: 'ID inválido para excluir colaborador.' }
+        return { ok: false, error: 'ID inválido para excluir serviço.' }
       }
 
       this.deleting = true
@@ -374,28 +364,28 @@ export const useStaffStore = defineStore('staff', {
         const userId = this.getCurrentUserId()
         const groupId = this.getCurrentGroupId()
 
-        const { data } = await api.delete(`/tenant/staff/${id}`, {
+        const { data } = await api.delete(`/tenant/services/${id}`, {
           params: { user_id: userId, group_id: groupId }
         })
 
-        this.staff = this.staff.filter(s => s.id !== id)
+        this.services = this.services.filter(s => s.id !== id)
 
-        if (this.currentStaff.id === id) {
-          this.resetCurrentStaff()
+        if (this.currentService.id === id) {
+          this.resetCurrentService()
         }
 
         this.saveToSession()
         Notify.create({
           type: 'positive',
-          message: 'Colaborador removido com sucesso.'
+          message: 'Serviço removido com sucesso.'
         })
 
         return { ok: true, data }
       } catch (err) {
-        console.error('Erro ao excluir colaborador:', err)
+        console.error('Erro ao excluir serviço:', err)
         const msg =
           err?.response?.data?.message ||
-          'Erro ao excluir colaborador.'
+          'Erro ao excluir serviço.'
         Notify.create({ type: 'negative', message: msg })
         return { ok: false, error: msg }
       } finally {
