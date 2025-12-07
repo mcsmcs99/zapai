@@ -23,6 +23,22 @@
           class="q-pa-md rounded-borders bg-grey-1 q-mb-md"
           style="border:1px solid #ECECEC"
         >
+          <!-- Linha de status -->
+          <div class="row items-center justify-between q-mb-md">
+            <div class="text-subtitle1 text-weight-bold">
+              Dados do Colaborador
+            </div>
+
+            <q-toggle
+              v-model="local.status"
+              :true-value="'active'"
+              :false-value="'inactive'"
+              color="positive"
+              dense
+              :label="local.status === 'active' ? 'Ativo' : 'Inativo'"
+            />
+          </div>
+
           <div class="row q-col-gutter-md q-mt-md">
             <q-input
               class="col-12 col-md-6"
@@ -263,7 +279,7 @@ const props = defineProps({
       name: '',
       role: '',
       photoUrl: '',
-      // default ainda pode ser no formato antigo (strings)
+      status: 'active',
       schedule: {
         mon: '08:30-17:30',
         tue: '08:30-17:30',
@@ -282,6 +298,7 @@ const emit = defineEmits(['update:modelValue', 'save'])
 // monta o local já com schedule normalizado
 const local = reactive({
   ...JSON.parse(JSON.stringify(props.value)),
+  status: props.value.status || 'active',
   schedule: normalizeSchedule(props.value.schedule)
 })
 
@@ -290,6 +307,7 @@ watch(
   v => {
     const cloned = JSON.parse(JSON.stringify(v))
     cloned.schedule = normalizeSchedule(cloned.schedule)
+    if (!cloned.status) cloned.status = 'active'
     Object.assign(local, cloned)
   }
 )
