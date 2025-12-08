@@ -228,6 +228,37 @@ export const useAuthStore = defineStore('auth', {
         Notify.create({ type: 'negative', message: msg })
         return null
       }
+    },
+    async updateProfile (payload) {
+      if (!this.userId) {
+        Notify.create({
+          type: 'negative',
+          message: 'Usuário não encontrado na sessão.'
+        })
+        return null
+      }
+
+      try {
+        const { data } = await api.patch(`/users/${this.userId}`, payload)
+
+        this.user = data
+        localStorage.setItem('auth_user', JSON.stringify(data))
+
+        Notify.create({
+          type: 'positive',
+          message: 'Perfil atualizado com sucesso!'
+        })
+
+        return data
+      } catch (err) {
+        const msg =
+          err?.response?.data?.message ||
+          'Não foi possível atualizar os dados do perfil.'
+
+        console.error(err)
+        Notify.create({ type: 'negative', message: msg })
+        return null
+      }
     }
   }
 })
