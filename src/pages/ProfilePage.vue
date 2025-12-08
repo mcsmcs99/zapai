@@ -159,17 +159,22 @@
       </q-form>
     </q-card>
   </q-page>
+  <ChangePasswordDialog
+    v-model="showChangePasswordDialog"
+    @confirm="handleChangePassword"
+  />
 </template>
 
 <script setup>
 import { reactive, computed, ref, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { useAuthStore } from 'src/stores/auth'
-
+import ChangePasswordDialog from 'src/components/ChangePasswordDialog.vue'
 defineOptions({ name: 'ProfilePage' })
 
 const $q = useQuasar()
 const auth = useAuthStore()
+const showChangePasswordDialog = ref(false)
 
 /**
  * Form ligado diretamente ao model User
@@ -294,8 +299,21 @@ async function onSubmit () {
 }
 
 function goToChangePassword () {
-  // redireciona para a rota de alteração de senha do tenant / sistema
-  // ex: $router.push({ name: 'change-password' })
+  showChangePasswordDialog.value = true
+}
+
+async function handleChangePassword (payload) {
+  try {
+    const ok = await auth.changePassword(payload)
+
+    if (ok) {
+      showChangePasswordDialog.value = false
+      $q.notify({ type: 'positive', message: 'Senha alterada com sucesso!' })
+    }
+  } catch (err) {
+    console.error(err)
+    $q.notify({ type: 'negative', message: 'Erro ao alterar a senha.' })
+  }
 }
 </script>
 

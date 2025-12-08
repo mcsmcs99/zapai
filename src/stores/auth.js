@@ -259,6 +259,42 @@ export const useAuthStore = defineStore('auth', {
         Notify.create({ type: 'negative', message: msg })
         return null
       }
+    },
+    async changePassword (payload) {
+      // payload esperado:
+      // { current_password: '...', new_password: '...' }
+
+      if (!this.userId) {
+        Notify.create({
+          type: 'negative',
+          message: 'Usuário não encontrado na sessão.'
+        })
+        return false
+      }
+
+      try {
+        // Endpoint de alteração de senha
+        await api.patch(`/users/${this.userId}/password`, payload)
+
+        // Se o backend devolver o user atualizado e você quiser atualizar o store:
+        // this.user = data
+        // localStorage.setItem('auth_user', JSON.stringify(data))
+
+        Notify.create({
+          type: 'positive',
+          message: 'Senha alterada com sucesso!'
+        })
+
+        return true
+      } catch (err) {
+        const msg =
+          err?.response?.data?.message ||
+          'Não foi possível alterar a senha.'
+
+        console.error(err)
+        Notify.create({ type: 'negative', message: msg })
+        return false
+      }
     }
   }
 })
