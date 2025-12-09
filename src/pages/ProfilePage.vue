@@ -73,7 +73,6 @@
               hint="Email não pode ser alterado"
             />
           </div>
-
         </q-card-section>
 
         <q-separator inset />
@@ -85,7 +84,6 @@
           </div>
 
           <div class="row q-col-gutter-lg">
-
             <!-- Tipo de usuário (User.type) -->
             <div class="col-12 col-md-6">
               <div class="text-caption text-weight-medium q-mb-xs">Tipo de Usuário</div>
@@ -124,12 +122,14 @@
 
         <q-separator inset />
 
-        <!-- BLOCO 3: Segurança -->
+        <!-- BLOCO 3: Segurança + Empresa atual -->
         <q-card-section>
+
+          <!-- Segurança -->
           <div class="text-subtitle2 text-weight-bold q-mb-sm">
             Segurança
           </div>
-          <div class="row items-center justify-between">
+          <div class="row items-center justify-between q-mb-md">
             <div class="text-body2 text-grey-7 q-mr-md">
               A senha não é exibida por segurança. Use o botão abaixo para alterá-la.
             </div>
@@ -139,6 +139,25 @@
               icon="vpn_key"
               label="Alterar senha"
               @click="goToChangePassword"
+            />
+          </div>
+
+          <q-separator inset class="q-my-sm" />
+
+          <!-- Empresa atual -->
+          <div class="text-subtitle2 text-weight-bold q-mb-sm">
+            Empresa atual
+          </div>
+          <div class="row items-center justify-between">
+            <div class="text-body2 text-grey-7 q-mr-md">
+              Visualize e edite os dados da empresa vinculada ao seu acesso atual.
+            </div>
+            <q-btn
+              flat
+              color="primary"
+              icon="business"
+              label="Dados da empresa"
+              @click="openCompanyDialog"
             />
           </div>
         </q-card-section>
@@ -159,9 +178,19 @@
       </q-form>
     </q-card>
   </q-page>
+
+  <!-- Dialog de troca de senha -->
   <ChangePasswordDialog
     v-model="showChangePasswordDialog"
     @confirm="handleChangePassword"
+  />
+
+  <!-- Dialog de empresa atual -->
+  <CurrentCompanyDialog
+    v-model="showCompanyDialog"
+    v-if="currentCompany"
+    :company="currentCompany"
+    @save="handleSaveCompany"
   />
 </template>
 
@@ -169,12 +198,19 @@
 import { reactive, computed, ref, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { useAuthStore } from 'src/stores/auth'
+import { useOnboardingStore } from 'src/stores/onboarding'
 import ChangePasswordDialog from 'src/components/ChangePasswordDialog.vue'
+import CurrentCompanyDialog from 'src/components/CurrentCompanyDialog.vue'
+
 defineOptions({ name: 'ProfilePage' })
 
 const $q = useQuasar()
 const auth = useAuthStore()
+const ob = useOnboardingStore() 
+
 const showChangePasswordDialog = ref(false)
+const showCompanyDialog = ref(false)
+const currentCompany = ref(null)
 
 /**
  * Form ligado diretamente ao model User
@@ -186,7 +222,7 @@ const form = reactive({
   displayName: '',   // valor exibido no topo / avatar (só muda após salvar)
   email: '',
   type: 'owner',          // super_admin | owner | admin | operational | final_customer
-  status: 'active',       // pending_group | pending_verification | active | black_list | removed
+  status: 'active'        // pending_group | pending_verification | active | black_list | removed
 })
 
 /**
@@ -242,30 +278,20 @@ const saving = ref(false)
 
 /**
  * Carrega dados do usuário logado.
- * Adapta o endpoint conforme seu back:
- *   GET /me
  */
 onMounted(async () => {
   try {
-    // const { data } = await api.get('/users/me')
-    // Object.assign(form, {
-    //   id: data.id,
-    //   unique_key: data.unique_key,
-    //   name: data.name,
-    //   displayName: data.name,
-    //   email: data.email,
-    //   type: data.type,
-    //   status: data.status,
-    // })
-
     // Exemplo mock só pra tela funcionar
-    form.id = 1
-    form.unique_key = '8c0b0e2c-1234-4321-aaaa-bbbbccccdddd'
-    form.name = 'Matheus Correia Dos Santos'
-    form.displayName = 'Matheus Correia Dos Santos'
-    form.email = 'mcsmatheusmcs99@gmail.com'
-    form.type = 'admin'
-    form.status = 'active'
+    form.id = auth.user?.id || 1
+    form.unique_key = auth.user?.unique_key || '8c0b0e2c-1234-4321-aaaa-bbbbccccdddd'
+    form.name = auth.user?.name || 'Matheus Correia Dos Santos'
+    form.displayName = form.name
+    form.email = auth.user?.email || 'mcsmatheusmcs99@gmail.com'
+    form.type = auth.user?.type || 'admin'
+    form.status = auth.user?.status || 'active'
+
+    // Se quiser amarrar permissão:
+    // canEditAdminFields.value = auth.user?.type === 'super_admin'
   } catch (err) {
     console.error(err)
     $q.notify({ type: 'negative', message: 'Não foi possível carregar os dados do perfil.' })
@@ -286,8 +312,6 @@ async function onSubmit () {
     if (updatedUser) {
       form.displayName = updatedUser.name
     }
-
-    saving.value = false
 
     $q.notify({ type: 'positive', message: 'Perfil atualizado com sucesso!' })
   } catch (e) {
@@ -313,6 +337,55 @@ async function handleChangePassword (payload) {
   } catch (err) {
     console.error(err)
     $q.notify({ type: 'negative', message: 'Erro ao alterar a senha.' })
+  }
+}
+
+/**
+ * Abre modal com dados da empresa atual (current_group_id do user)
+ */
+async function openCompanyDialog () {
+  try {
+    await ob.loadFromSession()
+
+    const company = ob.company || {}
+
+    const hasMinimalCompany =
+      !!company.id && !!company.document_number
+
+    if (!hasMinimalCompany) {
+      $q.notify({
+        type: 'warning',
+        message: 'Nenhuma empresa encontrada para este usuário.'
+      })
+      return
+    }
+
+    // passa uma cópia para a modal não mutar direto o store
+    currentCompany.value = { ...company }
+    showCompanyDialog.value = true
+  } catch (err) {
+    console.error(err)
+    $q.notify({
+      type: 'negative',
+      message: 'Não foi possível carregar os dados da empresa.'
+    })
+  }
+}
+
+/**
+ * Recebe os dados salvos da empresa a partir do dialog
+ */
+async function handleSaveCompany (companyPayload) {
+  try {
+    // se quiser reaproveitar o fluxo do onboarding:
+    Object.assign(ob.company, companyPayload)
+    await ob.saveCompany()
+    currentCompany.value = { ...currentCompany.value, ...companyPayload }
+    $q.notify({ type: 'positive', message: 'Dados da empresa atualizados com sucesso!' })
+    showCompanyDialog.value = false
+  } catch (err) {
+    console.error(err)
+    $q.notify({ type: 'negative', message: 'Erro ao salvar os dados da empresa.' })
   }
 }
 </script>
