@@ -21,13 +21,12 @@ export default defineRouter(function ({ store }) {
     const isAuthenticated = auth.isAuthenticated
     const isPending = auth.user?.status === 'pending_group'
     const isNeedSelectgGroup = auth.user?.current_group_id === null
-    console.log(auth.user)
     const requiresAuth = to.matched.some(r => r.meta?.requiresAuth)
     const isOnboarding = to.matched.some(r => r.meta?.onboarding)
 
     // 1) Bloqueia rotas protegidas para não autenticado
     if (requiresAuth && !isAuthenticated) {
-      return { name: 'login', query: { redirect: to.fullPath } }
+      return { name: 'login' }
     }
 
     // 2) Usuário autenticado mas pendente:
@@ -38,7 +37,7 @@ export default defineRouter(function ({ store }) {
 
     // 2) Usuário autenticado e sem empresa selecionada:
     //    só pode acessar a rota de seleção de empresa
-    if (isAuthenticated && isNeedSelectgGroup && to.name !== 'select-group') {
+    if (isAuthenticated && isNeedSelectgGroup && to.name !== 'select-group' && to.name !== 'onboarding-company') {
       return { name: 'select-group' }
     }
 
