@@ -86,7 +86,22 @@
             <div class="text-subtitle1 text-weight-bold q-mb-sm">
               Colaboradores que podem realizar este serviço
             </div>
+
+            <!-- Estado vazio -->
+            <q-banner
+              v-if="!collaborators || collaborators.length === 0"
+              rounded
+              class="bg-grey-2 text-grey-9"
+            >
+              Nenhum colaborador cadastrado.
+              <div class="q-mt-xs text-caption">
+                Cadastre um colaborador no menu <b>Colaboradores > Novo colaborador</b>.
+              </div>
+            </q-banner>
+
+            <!-- Lista -->
             <q-list
+              v-else
               bordered
               class="rounded-borders"
               style="max-height: 280px; overflow: auto;"
@@ -99,6 +114,7 @@
                 <q-item-section side>
                   <q-checkbox v-model="local.collaboratorIds" :val="c.id" />
                 </q-item-section>
+
                 <q-item-section>
                   <q-item-label class="text-weight-medium">
                     {{ c.name }}
@@ -108,6 +124,7 @@
               </q-item>
             </q-list>
           </div>
+
         </div>
 
         <!-- Ações -->
