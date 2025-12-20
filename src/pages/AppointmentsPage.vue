@@ -120,15 +120,18 @@
             <q-item v-for="a in g.items" :key="a.id" class="rounded-borders item-row">
               <q-item-section>
                 <div class="text-h6 text-weight-bold">{{ a.start }} - {{ a.end }}</div>
-                <div class="text-body1">{{ a.customer }}</div>
+                <div class="text-subtitle1 text-weight-medium">
+                  {{ a.customer || 'Cliente não informado' }}
+                </div>
 
-                <div class="row items-center q-gutter-sm q-mt-xs text-grey-7">
-                  <div class="row items-center">
-                    <q-icon name="content_cut" class="q-mr-xs" /> {{ a.service }}
-                  </div>
-                  <div class="row items-center">
-                    <q-icon name="person_outline" class="q-mr-xs" /> {{ a.collaborator }}
-                  </div>
+                <div class="row items-center q-gutter-xs q-mt-xs">
+                  <q-chip dense square icon="content_cut" color="grey-2" text-color="grey-9">
+                    {{ a.service }}
+                  </q-chip>
+
+                  <q-chip dense square icon="person_outline" color="grey-2" text-color="grey-9">
+                    {{ a.collaborator }}
+                  </q-chip>
                 </div>
               </q-item-section>
 
@@ -228,6 +231,44 @@ const appointmentsStore = useAppointmentsStore()
 const { services } = storeToRefs(servicesStore)
 const { staff } = storeToRefs(staffStore)
 const { appointments } = storeToRefs(appointmentsStore)
+
+const serviceById = computed(() => {
+  const map = new Map()
+  for (const s of (services.value || [])) map.set(Number(s.id), s)
+  return map
+})
+
+const staffById = computed(() => {
+  const map = new Map()
+  for (const p of (staff.value || [])) map.set(Number(p.id), p)
+  return map
+})
+
+const appointmentsEnriched = computed(() => {
+  return (appointments.value || []).map(a => {
+    const serviceId = Number(a.service_id ?? a.serviceId ?? 0)
+    const collabId = Number(a.collaborator_id ?? a.collaboratorId ?? 0)
+
+    const s = serviceById.value.get(serviceId)
+    const c = staffById.value.get(collabId)
+
+    return {
+      ...a,
+
+      // nomes para apresentar
+      service: s?.title || 'Serviço não encontrado',
+      collaborator: c?.name || 'Colaborador não encontrado',
+
+      // cliente (se não vier do backend, cai no fallback)
+      customer:
+        a.customer_name ??
+        a.customerName ??
+        a.customer ??
+        ''
+    }
+  })
+})
+
 
 /* -------- dialog (create/edit/view) -------- */
 const dlg = reactive({
@@ -347,13 +388,19 @@ const statusMap = {
 }
 
 const collabOpts = computed(() => {
-  // agora usa o nome exibido (a.collaborator) só pra filtro
-  const set = Array.from(new Set((appointments.value || []).map(a => a.collaborator))).filter(Boolean).sort()
+  const set = Array.from(new Set((appointmentsEnriched.value || []).map(a => a.collaborator)))
+    .filter(Boolean)
+    .sort()
+
   return [{ label: 'Todos', value: 'all' }, ...set.map(x => ({ label: x, value: x }))]
 })
 
+
 const serviceOpts = computed(() => {
-  const set = Array.from(new Set((appointments.value || []).map(a => a.service))).filter(Boolean).sort()
+  const set = Array.from(new Set((appointmentsEnriched.value || []).map(a => a.service)))
+    .filter(Boolean)
+    .sort()
+
   return [{ label: 'Todos', value: 'all' }, ...set.map(x => ({ label: x, value: x }))]
 })
 
@@ -375,7 +422,7 @@ const filteredFlat = computed(() => {
   const from = parseBR(f.value.from)
   const to = parseBR(f.value.to)
 
-  return (appointments.value || [])
+  return (appointmentsEnriched.value || [])
     .filter(a => {
       const okQ = !q || [a.customer, a.service, a.collaborator].some(t => String(t || '').toLowerCase().includes(q))
       const okS = f.value.status === 'all' || a.status === f.value.status
@@ -421,11 +468,19 @@ onMounted(async () => {
   await servicesStore.fetchServices()
   await staffStore.fetchStaff()
   await appointmentsStore.fetchAppointments()
+
+  console.log(services.value)
+  console.log(staff.value)
+  console.log(appointments.value)
 })
 </script>
 
 <style scoped>
 .filter-card { border-radius: 14px; box-shadow: 0 6px 16px rgba(0,0,0,.05); }
-.item-row { border: 1px solid #eef0f3; }
+.item-row {
+  border: 1px solid #eef0f3;
+  border-radius: 12px;
+  padding: 8px 6px;
+}
 .rounded-borders { border-radius: 12px; }
 </style>

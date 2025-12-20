@@ -59,21 +59,35 @@ export const useAppointmentsStore = defineStore('appointments', {
 
     // normalização -------------------------------------
     normalizeAppointment (row = {}) {
-      return {
-        id: row.id ?? null,
+      // ids (aceita camelCase, snake_case e objetos)
+      const serviceId =
+        row.serviceId ?? row.service_id ?? row.service?.id ?? null
 
+      const collaboratorId =
+        row.collaboratorId ?? row.collaborator_id ?? row.collaborator?.id ?? row.staff?.id ?? null
+
+      const customerName = row.customer_name ?? ''
+
+      return {
+        // base
+        id: row.id ?? null,
         date: row.date ?? '',
 
         start: row.start ?? '',
         end: row.end ?? '',
 
         status: row.status ?? 'confirmed',
-        price: row.price ?? 0,
+        price: Number(row.price ?? 0),
 
-        serviceId: row.serviceId ?? row.service_id ?? null,
-        collaboratorId: row.collaboratorId ?? row.collaborator_id ?? null,
+        // ======= para salvar/editar =======
+        serviceId,
+        collaboratorId,
+        customerName,
 
-        customerName: row.customerName ?? row.customer_name ?? row.customer ?? ''
+        // ======= compat (evita quebrar código existente) =======
+        service_id: serviceId,
+        collaborator_id: collaboratorId,
+        customer_name: customerName
       }
     },
 

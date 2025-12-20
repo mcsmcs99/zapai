@@ -266,7 +266,7 @@ const busyRanges = computed(() => {
     .filter(a =>
       a.date === dateISO &&
       a.status !== 'cancelled' &&
-      a.collaborator_id === local.collaborator_id
+      (a.collaborator_id ?? a.collaboratorId) === local.collaborator_id
     )
     .map(a => ({ startMin: toMin(a.start), endMin: toMin(a.end) }))
 })
