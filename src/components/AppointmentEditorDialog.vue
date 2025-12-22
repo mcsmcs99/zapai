@@ -228,7 +228,6 @@ const toHHMM = (mins) => {
   const m = mins % 60
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
-const addMinutes = (hhmm, minutes) => toHHMM(toMin(hhmm) + Number(minutes || 0))
 
 /* dados derivados */
 const activeServices = computed(() => (props.services || []).filter(s => s.status === 'active'))
@@ -260,16 +259,41 @@ const canShowSlots = computed(() =>
 
 const busyRanges = computed(() => {
   if (!canShowSlots.value) return []
+
   const dateISO = toISOFromBR(local.dateBR)
 
-  return (props.appointments || [])
-    .filter(a =>
-      a.date === dateISO &&
-      a.status !== 'cancelled' &&
-      (a.collaborator_id ?? a.collaboratorId) === local.collaborator_id
-    )
-    .map(a => ({ startMin: toMin(a.start), endMin: toMin(a.end) }))
+  // aceita tanto array direto quanto { data: [...] }
+  const list = Array.isArray(props.appointments)
+    ? props.appointments
+    : (props.appointments?.data || [])
+
+  return list
+    .filter(a => {
+      const aDate = a.date
+      const aStatus = a.status
+
+      // regra de ativo: bloqueia tudo que NÃO for cancelled
+      const isActive = aStatus !== 'cancelled'
+
+      const aCollabId = (a.collaborator_id ?? a.collaboratorId)
+      const sameCollab = Number(aCollabId) === Number(local.collaborator_id)
+
+      const sameDay = aDate === dateISO
+
+      // se estiver editando, ignora o próprio agendamento
+      const isSameRecord = currentAppointmentId.value && Number(a.id) === Number(currentAppointmentId.value)
+
+      return sameDay && sameCollab && isActive && !isSameRecord
+    })
+    .map(a => ({
+      startMin: toMin(a.start),
+      endMin: toMin(a.end)
+    }))
+    // sanidade: remove ranges inválidos
+    .filter(r => Number.isFinite(r.startMin) && Number.isFinite(r.endMin) && r.endMin > r.startMin)
 })
+
+const currentAppointmentId = computed(() => props.value?.id ?? null)
 
 function overlapsAnyBusy (startMin, endMin) {
   for (const b of busyRanges.value) {
@@ -300,15 +324,30 @@ const slotOptions = computed(() => {
     const end = toMin(it.end)
 
     for (let t = start; t + duration <= end; t += duration) {
-      if (overlapsAnyBusy(t, t + duration)) continue
-
       const s = toHHMM(t)
       const e = toHHMM(t + duration)
-      slots.push({ label: `${s} - ${e}`, value: s })
+
+      const isBusy = overlapsAnyBusy(t, t + duration)
+
+      slots.push({
+        label: isBusy ? `${s} - ${e} (Indisponível)` : `${s} - ${e}`,
+        value: s,
+        disable: isBusy
+      })
     }
   }
+
   return slots
 })
+
+watch(
+  () => slotOptions.value,
+  (opts) => {
+    if (!local.start) return
+    const found = (opts || []).find(o => o.value === local.start)
+    if (!found || found.disable) local.start = ''
+  }
+)
 
 const canSubmit = computed(() => {
   if (isView.value) return false
@@ -323,19 +362,28 @@ function onSubmit () {
   const dateISO = toISOFromBR(local.dateBR)
   if (!service || !dateISO) return
 
+  const startMin = toMin(local.start)
+  const endMin = startMin + Number(service.duration || 0)
+
+  // Hard-block: se conflitar, não salva
+  if (overlapsAnyBusy(startMin, endMin)) {
+    // Notify.create({ type: 'negative', message: 'Horário indisponível para este colaborador.' })
+    return
+  }
+
   const payload = {
     service_id: local.service_id,
     collaborator_id: local.collaborator_id,
     date: dateISO,
     start: local.start,
-    end: addMinutes(local.start, service.duration),
+    end: toHHMM(endMin),
     customer_name: local.customer_name.trim()
-    // se seu back usar customer_id em vez de nome, troque aqui
   }
 
   emit('save', payload)
   emit('update:modelValue', false)
 }
+
 </script>
 
 <style scoped>
