@@ -108,7 +108,7 @@
             dense
             label="Cliente *"
             placeholder="Ex.: João da Silva"
-            :disable="isView || !local.start"
+            :disable="isView || !local.start || mode === 'edit'"
             :rules="[v => !!v || 'Informe o nome do cliente']"
             clearable
           />
@@ -353,7 +353,10 @@ const canSubmit = computed(() => {
   if (isView.value) return false
   if (!canShowSlots.value) return false
   if (!local.start) return false
-  if (!local.customer_name.trim()) return false
+
+  // no create exige nome; no edit não exige
+  if (props.mode === 'create' && !local.customer_name.trim()) return false
+
   return true
 })
 
@@ -372,12 +375,16 @@ function onSubmit () {
   }
 
   const payload = {
-    service_id: local.service_id,
-    collaborator_id: local.collaborator_id,
+    service_id: Number(local.service_id),
+    collaborator_id: Number(local.collaborator_id),
     date: dateISO,
     start: local.start,
-    end: toHHMM(endMin),
-    customer_name: local.customer_name.trim()
+    end: toHHMM(endMin)
+  }
+
+  // só envia customer_name no create
+  if (props.mode === 'create') {
+    payload.customer_name = local.customer_name.trim()
   }
 
   emit('save', payload)

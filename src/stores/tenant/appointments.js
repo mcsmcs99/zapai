@@ -407,24 +407,37 @@ export const useAppointmentsStore = defineStore('appointments', {
       }
 
       // pega o registro atual na lista (ou do currentAppointment)
-      const current =
+      let current =
         this.appointments.find(a => a.id === id) ||
         (this.currentAppointment?.id === id ? this.currentAppointment : null)
 
       if (!current) {
-        // fallback: busca do backend pra não sobrescrever com vazio
         const r = await this.fetchAppointmentById(id)
         if (!r?.ok) return r
+
+        // depois do fetch, tenta pegar de novo
+        current =
+          this.appointments.find(a => a.id === id) ||
+          (this.currentAppointment?.id === id ? this.currentAppointment : null) ||
+          {}
       }
 
-      const base =
-        this.appointments.find(a => a.id === id) ||
-        (this.currentAppointment?.id === id ? this.currentAppointment : {})
+      // normaliza snake_case -> camelCase (e garante overwrite)
+      const normalizedPatch = { ...patch }
 
-      // merge preservando o que já existe
+      if (typeof patch.service_id !== 'undefined') normalizedPatch.serviceId = patch.service_id
+      if (typeof patch.collaborator_id !== 'undefined') normalizedPatch.collaboratorId = patch.collaborator_id
+      if (typeof patch.customer_id !== 'undefined') normalizedPatch.customerId = patch.customer_id
+
+      // (opcional) remove as chaves snake pra não poluir o objeto
+      delete normalizedPatch.service_id
+      delete normalizedPatch.collaborator_id
+      delete normalizedPatch.customer_id
+
+      // merge: base -> patch normalizado -> id
       this.currentAppointment = {
-        ...base,
-        ...patch,
+        ...current,
+        ...normalizedPatch,
         id
       }
 
