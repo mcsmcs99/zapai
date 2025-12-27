@@ -59,12 +59,23 @@
             readonly
             input-class="cursor-pointer"
             :disable="isView || !local.service_id || !local.collaborator_id"
-            :rules="[v => !!parseBR(v) || 'Informe uma data válida']"
+            :rules="[
+              v => !!parseBR(v) || 'Informe uma data válida',
+              v => {
+                const iso = toISOFromBR(v)
+                return !iso || iso >= minDateISO || 'Não é permitido selecionar uma data anterior a hoje'
+              }
+            ]"
           >
             <template #append>
               <q-icon name="event" class="cursor-pointer">
                 <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                  <q-date v-model="local.dateBR" mask="DD/MM/YYYY" />
+                  <q-date
+                    v-model="local.dateBR"
+                    mask="DD/MM/YYYY"
+                    :options="dateOptions"
+                    :default-year-month="minDateISO.slice(0, 7)"
+                  />
                 </q-popup-proxy>
               </q-icon>
             </template>
@@ -185,9 +196,15 @@ watch(
   (open) => {
     if (!open) return
 
-    // ✅ se veio value (view/edit), preenche; senão, reseta (create)
-    if (props.value) fillFromValue(props.value)
-    else resetLocal()
+    // view/edit: preenche do value
+    if (props.value) {
+      fillFromValue(props.value)
+      return
+    }
+
+    // create: reseta e já seta hoje
+    resetLocal()
+    local.dateBR = todayBR()
   }
 )
 
@@ -227,6 +244,18 @@ const toHHMM = (mins) => {
   const h = Math.floor(mins / 60)
   const m = mins % 60
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+const pad2 = (n) => String(n).padStart(2, '0')
+const todayISO = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+}
+const minDateISO = computed(() => todayISO())
+// QDate: permite somente dias >= hoje
+const dateOptions = (iso) => iso >= minDateISO.value
+const todayBR = () => {
+  const d = new Date()
+  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`
 }
 
 /* dados derivados */
