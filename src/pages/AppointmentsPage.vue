@@ -414,24 +414,47 @@ const parseBR = (s) => {
   return new Date(y, m - 1, d)
 }
 
-const fmtDateLong = (iso) =>
-  new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).format(new Date(iso))
+const isoToLocalDate = (iso) => {
+  if (!iso) return null
+  const [y, m, d] = String(iso).split('-').map(Number)
+  if (!y || !m || !d) return null
+  // meio-dia local evita shift de fuso
+  return new Date(y, m - 1, d, 12, 0, 0)
+}
+
+const fmtDateLong = (iso) => {
+  const dt = isoToLocalDate(iso)
+  if (!dt) return ''
+  return new Intl.DateTimeFormat('pt-BR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long'
+  }).format(dt)
+}
 
 const filteredFlat = computed(() => {
   const q = f.value.q.trim().toLowerCase()
   const from = parseBR(f.value.from)
   const to = parseBR(f.value.to)
 
+  // normaliza from/to para meio-dia também (evita edge case)
+  const norm = (dt) => (dt ? new Date(dt.getFullYear(), dt.getMonth(), dt.getDate(), 12, 0, 0) : null)
+  const fromN = norm(from)
+  const toN = norm(to)
+
   return (appointmentsEnriched.value || [])
     .filter(a => {
-      const okQ = !q || [a.customer, a.service, a.collaborator].some(t => String(t || '').toLowerCase().includes(q))
+      const okQ = !q || [a.customer, a.service, a.collaborator]
+        .some(t => String(t || '').toLowerCase().includes(q))
+
       const okS = f.value.status === 'all' || a.status === f.value.status
       const okC = f.value.collab === 'all' || a.collaborator === f.value.collab
       const okV = f.value.service === 'all' || a.service === f.value.service
 
-      const d = new Date(a.date)
-      const okFrom = !from || d >= from
-      const okTo = !to || d <= to
+      const d = isoToLocalDate(a.date)
+      const okFrom = !fromN || (d && d >= fromN)
+      const okTo = !toN || (d && d <= toN)
+
       return okQ && okS && okC && okV && okFrom && okTo
     })
     .sort((a, b) => (a.date === b.date ? a.start.localeCompare(b.start) : a.date.localeCompare(b.date)))
