@@ -380,12 +380,12 @@ function onSubmit () {
     date: dateISO,
     start: local.start,
     end: toHHMM(endMin),
-    price: Number(service.price ?? 0)
   }
 
   // só envia customer_name no create
   if (props.mode === 'create') {
     payload.customer_name = local.customer_name.trim()
+    payload.price = Number(service.price ?? 0)
   }
 
   emit('save', payload)
