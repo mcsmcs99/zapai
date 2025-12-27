@@ -76,7 +76,7 @@ export const useAppointmentsStore = defineStore('appointments', {
         start: row.start ?? '',
         end: row.end ?? '',
 
-        status: row.status ?? 'confirmed',
+        status: row.status ?? 'pending',
         price: Number(row.price ?? 0),
 
         // ======= para salvar/editar =======
