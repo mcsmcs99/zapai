@@ -379,7 +379,8 @@ function onSubmit () {
     collaborator_id: Number(local.collaborator_id),
     date: dateISO,
     start: local.start,
-    end: toHHMM(endMin)
+    end: toHHMM(endMin),
+    price: Number(service.price ?? 0)
   }
 
   // só envia customer_name no create
