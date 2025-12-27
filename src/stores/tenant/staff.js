@@ -48,7 +48,8 @@ export const useStaffStore = defineStore('staff', {
       role: '',
       photoUrl: '',
       status: 'active',
-      schedule: createDefaultSchedule()
+      schedule: createDefaultSchedule(),
+      serviceIds: []
     }
   }),
 
@@ -79,7 +80,8 @@ export const useStaffStore = defineStore('staff', {
         role: staffData.role ?? '',
         photoUrl: staffData.photoUrl ?? '',
         status: staffData.status || 'active',
-        schedule: staffData.schedule || createDefaultSchedule()
+        schedule: staffData.schedule || createDefaultSchedule(),
+        serviceIds: Array.isArray(staffData.serviceIds) ? staffData.serviceIds : []
       }
       this.saveToSession()
     },
@@ -108,7 +110,8 @@ export const useStaffStore = defineStore('staff', {
         role: '',
         photoUrl: '',
         status: 'active',
-        schedule: createDefaultSchedule()
+        schedule: createDefaultSchedule(),
+        serviceIds: []
       }
       this.saveToSession()
     },

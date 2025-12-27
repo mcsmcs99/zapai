@@ -65,6 +65,55 @@
             />
           </div>
 
+          <!-- Serviços -->
+          <div class="q-mt-lg">
+            <div class="text-subtitle1 text-weight-bold q-mb-sm">
+              Serviços que este colaborador pode realizar
+            </div>
+
+            <!-- Estado vazio -->
+            <q-banner
+              v-if="!services || services.length === 0"
+              rounded
+              class="bg-grey-2 text-grey-9"
+            >
+              Nenhum serviço cadastrado.
+              <div class="q-mt-xs text-caption">
+                Cadastre um serviço no menu <b>Serviços > Novo serviço</b>.
+              </div>
+            </q-banner>
+
+            <!-- Lista -->
+            <q-list
+              v-else
+              bordered
+              class="rounded-borders"
+              style="max-height: 280px; overflow: auto;"
+            >
+              <q-item
+                v-for="s in services"
+                :key="s.id"
+                tag="label"
+              >
+                <q-item-section side>
+                  <q-checkbox v-model="local.serviceIds" :val="s.id" />
+                </q-item-section>
+
+                <q-item-section>
+                  <q-item-label class="text-weight-medium">
+                    {{ s.title }}
+                  </q-item-label>
+
+                  <q-item-label caption>
+                    <span v-if="s.duration">Duração: {{ s.duration }}min</span>
+                    <span v-if="s.price != null" class="q-ml-sm">• R$ {{ Number(s.price).toFixed(2) }}</span>
+                    <span v-if="s.status" class="q-ml-sm">• {{ s.status === 'active' ? 'Ativo' : 'Inativo' }}</span>
+                  </q-item-label>
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </div>
+
           <!-- Horários -->
           <div class="q-mt-md" ref="workRef">
             <div class="row items-center q-gutter-sm q-mb-sm">
@@ -280,6 +329,7 @@ const props = defineProps({
       role: '',
       photoUrl: '',
       status: 'active',
+      serviceIds: [],
       schedule: {
         mon: '08:30-17:30',
         tue: '08:30-17:30',
@@ -290,6 +340,11 @@ const props = defineProps({
         sun: 'Fechado'
       }
     })
+  },
+
+  services: {
+    type: Array,
+    default: () => [] // [{ id, title, duration, price, status }]
   }
 })
 
@@ -299,6 +354,7 @@ const emit = defineEmits(['update:modelValue', 'save'])
 const local = reactive({
   ...JSON.parse(JSON.stringify(props.value)),
   status: props.value.status || 'active',
+  serviceIds: Array.isArray(props.value.serviceIds) ? [...props.value.serviceIds] : [], // ✅
   schedule: normalizeSchedule(props.value.schedule)
 })
 
@@ -308,6 +364,7 @@ watch(
     const cloned = JSON.parse(JSON.stringify(v))
     cloned.schedule = normalizeSchedule(cloned.schedule)
     if (!cloned.status) cloned.status = 'active'
+    if (!Array.isArray(cloned.serviceIds)) cloned.serviceIds = [] // ✅
     Object.assign(local, cloned)
   }
 )

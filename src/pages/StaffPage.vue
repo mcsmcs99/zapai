@@ -145,6 +145,7 @@
       v-model="editor.open"
       :mode="editor.mode"
       :value="staffStore.currentStaff"
+      :services="servicesStore.services"
       @save="saveStaff"
     />
   </q-page>
@@ -155,10 +156,13 @@ import { ref, reactive, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import StaffEditorDialog from 'components/StaffEditorDialog.vue'
 import { useStaffStore } from 'src/stores/tenant/staff'
+import { useServicesStore } from 'src/stores/tenant/services'
 
 defineOptions({ name: 'StaffPage' })
 
 const staffStore = useStaffStore()
+const servicesStore = useServicesStore()
+
 const { staff: staffList } = storeToRefs(staffStore)
 
 /* ------- helpers ------- */
@@ -179,6 +183,14 @@ function workDays (schedule) {
     return acc + (day && day.closed === false ? 1 : 0)
   }, 0)
 }
+function buildServiceIdsFromServices (staffId) {
+  const out = []
+  for (const s of servicesStore.services || []) {
+    const ids = Array.isArray(s.collaboratorIds) ? s.collaboratorIds : []
+    if (ids.includes(staffId)) out.push(s.id)
+  }
+  return out
+}
 
 /* ------- editor (modal completa) ------- */
 const editor = reactive({
@@ -196,7 +208,8 @@ function openCreate () {
 function openEdit (row) {
   editor.mode = 'edit'
   // garante que a estrutura do schedule está normalizada pelo dialog
-  staffStore.setCurrentStaff(row)
+  const serviceIds = buildServiceIdsFromServices(row.id)
+  staffStore.setCurrentStaff({ ...row, serviceIds })
   editor.open = true
 }
 
@@ -206,13 +219,48 @@ function openAgenda (row) {
   setTimeout(() => editorRef.value?.focusWork(), 60)
 }
 
+async function syncStaffServices (staffId, selectedServiceIds = []) {
+  const selected = new Set((selectedServiceIds || []).map(Number))
+  const all = servicesStore.services || []
+
+  const tasks = []
+
+  for (const s of all) {
+    const current = Array.isArray(s.collaboratorIds) ? [...s.collaboratorIds].map(Number) : []
+    const has = current.includes(Number(staffId))
+    const shouldHave = selected.has(Number(s.id))
+
+    if (shouldHave && !has) {
+      tasks.push(
+        servicesStore.updateService(s.id, { collaboratorIds: [...current, Number(staffId)] })
+      )
+    } else if (!shouldHave && has) {
+      tasks.push(
+        servicesStore.updateService(s.id, { collaboratorIds: current.filter(id => id !== Number(staffId)) })
+      )
+    }
+  }
+
+  if (tasks.length) {
+    const results = await Promise.all(tasks)
+    const failed = results.filter(r => !r?.ok)
+    if (failed.length) {
+      // opcional: você pode notificar aqui se quiser
+      console.warn('Algumas atualizações de serviços falharam:', failed)
+    }
+    await servicesStore.fetchServices()
+  }
+}
+
 async function saveStaff (data) {
-  // dialog já validou schedule e devolve objeto pronto
   staffStore.setCurrentStaff(data)
   const resp = await staffStore.saveCurrentStaff()
+  if (!resp.ok) return
+
+  const staffId = resp.data?.id || staffStore.currentStaff.id
+  await syncStaffServices(staffId, data.serviceIds || [])
 
   if (resp.ok && editor.mode === 'create') {
-    // se quiser garantir sincronismo com paginação do back
     await staffStore.fetchStaff()
   }
 }
@@ -233,6 +281,7 @@ async function remove () {
     rm.open = false
     rm.row = null
   }
+  await syncStaffServices(rm.row.id, [])
 }
 
 async function toggleActive (p) {
@@ -242,11 +291,12 @@ async function toggleActive (p) {
 }
 
 /* ------- lifecycle ------- */
-onMounted(() => {
-  // carrega da sessão se existir
+onMounted(async () => {
   staffStore.loadFromSession()
-  // e sempre tenta puxar do back (já manda user_id + currentGroup.id)
-  staffStore.fetchStaff()
+  await Promise.all([
+    staffStore.fetchStaff(),
+    servicesStore.fetchServices()
+  ])
 })
 </script>
 

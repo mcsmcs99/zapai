@@ -6,6 +6,21 @@ import { useAuthStore } from 'src/stores/auth'
 
 const KEY = 'services_state'
 
+function parseIds (raw) {
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw
+  if (typeof raw === 'string') {
+    try {
+      const j = JSON.parse(raw)
+      if (Array.isArray(j)) return j
+    } catch (e) {
+      console.error(e)
+    }
+    return raw.split(',').map(s => Number(String(s).trim())).filter(n => Number.isFinite(n))
+  }
+  return []
+}
+
 export const useServicesStore = defineStore('services', {
   state: () => ({
     loadingList: false,
@@ -65,7 +80,7 @@ export const useServicesStore = defineStore('services', {
         duration: serviceData.duration ?? 30,
         description: serviceData.description ?? '',
         status: serviceData.status || 'active',
-        collaboratorIds: serviceData.collaboratorIds || serviceData.collaborator_ids || []
+        collaboratorIds: parseIds(serviceData.collaboratorIds ?? serviceData.collaborator_ids)
       }
       this.saveToSession()
     },
@@ -199,7 +214,11 @@ export const useServicesStore = defineStore('services', {
         // ajuste aqui pra bater com tua API: /tenant/services
         const { data } = await api.get('/tenant/services', { params: query })
 
-        this.services = data.data || []
+        this.services = (data.data || []).map(s => ({
+          ...s,
+          collaboratorIds: parseIds(s.collaboratorIds ?? s.collaborator_ids)
+        }))
+
         if (data.meta) {
           this.meta = {
             ...this.meta,
@@ -243,16 +262,15 @@ export const useServicesStore = defineStore('services', {
           params: { user_id: userId, group_id: groupId }
         })
 
-        this.currentService = {
-          ...this.currentService,
+        const normalized = {
           ...data,
-          collaboratorIds: data.collaboratorIds || data.collaborator_ids || []
+          collaboratorIds: parseIds(data.collaboratorIds ?? data.collaborator_ids)
         }
 
-        const index = this.services.findIndex(s => s.id === data.id)
-        if (index !== -1) {
-          this.services.splice(index, 1, data)
-        }
+        this.currentService = { ...this.currentService, ...normalized }
+
+        const index = this.services.findIndex(s => s.id === normalized.id)
+        if (index !== -1) this.services.splice(index, 1, normalized)
 
         this.saveToSession()
 
@@ -317,7 +335,7 @@ export const useServicesStore = defineStore('services', {
         this.currentService = {
           ...this.currentService,
           ...data,
-          collaboratorIds: data.collaboratorIds || data.collaborator_ids || []
+          collaboratorIds: parseIds(data.collaboratorIds ?? data.collaborator_ids)
         }
 
         const index = this.services.findIndex(s => s.id === data.id)
@@ -343,6 +361,74 @@ export const useServicesStore = defineStore('services', {
           (this.currentService.id
             ? 'Erro ao atualizar serviço.'
             : 'Erro ao criar serviço.')
+        Notify.create({ type: 'negative', message: msg })
+        return { ok: false, error: msg }
+      } finally {
+        this.saving = false
+      }
+    },
+
+    /**
+     * Atualiza um serviço específico sem depender do currentService
+     * (ideal para atualizações em lote, ex: sync de collaboratorIds)
+     */
+    async updateService (id, patch = {}) {
+      if (!id) {
+        const msg = 'ID inválido para atualizar serviço.'
+        Notify.create({ type: 'negative', message: msg })
+        return { ok: false, error: msg }
+      }
+
+      this.saving = true
+      try {
+        const userId = this.getCurrentUserId()
+        const groupId = this.getCurrentGroupId()
+
+        if (!groupId) {
+          const msg = 'Nenhum grupo selecionado para atualizar serviço.'
+          Notify.create({ type: 'negative', message: msg })
+          return { ok: false, error: msg }
+        }
+
+        // garante formato certo no payload
+        const payload = { ...patch }
+        if ('collaboratorIds' in payload || 'collaborator_ids' in payload) {
+          payload.collaboratorIds = parseIds(payload.collaboratorIds ?? payload.collaborator_ids)
+          delete payload.collaborator_ids
+        }
+
+        const resp = await api.put(`/tenant/services/${id}`, payload, {
+          params: { user_id: userId, group_id: groupId }
+        })
+
+        const data = resp.data
+
+        // normaliza collaboratorIds no retorno
+        const normalized = {
+          ...data,
+          collaboratorIds: parseIds(data.collaboratorIds ?? data.collaborator_ids)
+        }
+
+        // atualiza lista local
+        const idx = this.services.findIndex(s => s.id === normalized.id)
+        if (idx !== -1) this.services.splice(idx, 1, normalized)
+
+        // se por acaso esse era o currentService aberto em outra tela
+        if (this.currentService?.id === normalized.id) {
+          this.currentService = {
+            ...this.currentService,
+            ...normalized,
+            collaboratorIds: normalized.collaboratorIds
+          }
+        }
+
+        this.saveToSession()
+        return { ok: true, data: normalized }
+      } catch (err) {
+        console.error('Erro ao atualizar serviço:', err)
+        const msg =
+          err?.response?.data?.message ||
+          'Erro ao atualizar serviço.'
         Notify.create({ type: 'negative', message: msg })
         return { ok: false, error: msg }
       } finally {
