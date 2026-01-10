@@ -45,7 +45,11 @@
               dense
               label="Nome da unidade *"
               placeholder="Ex: Barbearia Centro"
-              :rules="[v => !!v || 'Informe o nome']"
+              :maxlength="LIMITS.unit.name"
+              counter
+              :rules="[rules.required, rules.max(LIMITS.unit.name)]"
+              lazy-rules="ondemand"
+              hide-bottom-space
             />
 
             <q-input
@@ -57,6 +61,11 @@
               placeholder="+5547999999999"
               :mask="phoneMask"
               fill-mask
+              :maxlength="LIMITS.unit.phone"
+              counter
+              :rules="[rules.max(LIMITS.unit.phone)]"
+              lazy-rules="ondemand"
+              hide-bottom-space
             />
 
             <q-input
@@ -66,6 +75,11 @@
               dense
               label="Email"
               placeholder="contato@empresa.com"
+              :maxlength="LIMITS.unit.email"
+              counter
+              :rules="[rules.email, rules.max(LIMITS.unit.email)]"
+              lazy-rules="ondemand"
+              hide-bottom-space
             />
 
             <!-- Timezone como select -->
@@ -105,6 +119,11 @@
                 dense
                 label="CEP / Postal Code"
                 placeholder="89010-000"
+                :maxlength="LIMITS.unit.postal_code"
+                counter
+                :rules="[rules.max(LIMITS.unit.postal_code)]"
+                lazy-rules="ondemand"
+                hide-bottom-space
               />
 
               <q-input
@@ -114,6 +133,11 @@
                 dense
                 label="Rua / Avenida"
                 placeholder="Ex: Rua 7 de Setembro"
+                :maxlength="LIMITS.unit.address_line1"
+                counter
+                :rules="[rules.max(LIMITS.unit.address_line1)]"
+                lazy-rules="ondemand"
+                hide-bottom-space
               />
 
               <q-input
@@ -123,6 +147,11 @@
                 dense
                 label="Número"
                 placeholder="Ex: 123"
+                :maxlength="20"
+                counter
+                :rules="[rules.max(20)]"
+                lazy-rules="ondemand"
+                hide-bottom-space
               />
 
               <q-input
@@ -132,6 +161,11 @@
                 dense
                 label="Complemento"
                 placeholder="Ex: Sala 502, Apto 12, Bloco B"
+                :maxlength="LIMITS.unit.address_line2"
+                counter
+                :rules="[rules.max(LIMITS.unit.address_line2)]"
+                lazy-rules="ondemand"
+                hide-bottom-space
               />
 
               <q-input
@@ -141,6 +175,11 @@
                 dense
                 label="Bairro / Distrito"
                 placeholder="Centro"
+                :maxlength="LIMITS.unit.sublocality"
+                counter
+                :rules="[rules.max(LIMITS.unit.sublocality)]"
+                lazy-rules="ondemand"
+                hide-bottom-space
               />
 
               <q-input
@@ -150,6 +189,11 @@
                 dense
                 label="Cidade"
                 placeholder="Blumenau"
+                :maxlength="LIMITS.unit.locality"
+                counter
+                :rules="[rules.max(LIMITS.unit.locality)]"
+                lazy-rules="ondemand"
+                hide-bottom-space
               />
 
               <q-input
@@ -159,6 +203,11 @@
                 dense
                 label="Estado / Província / Região"
                 placeholder="SC"
+                :maxlength="LIMITS.unit.administrative_area"
+                counter
+                :rules="[rules.max(LIMITS.unit.administrative_area)]"
+                lazy-rules="ondemand"
+                hide-bottom-space
               />
             </div>
 
@@ -203,6 +252,11 @@
                 dense
                 label="Place ID"
                 placeholder="Google Place ID (opcional)"
+                :maxlength="LIMITS.unit.place_id"
+                counter
+                :rules="[rules.max(LIMITS.unit.place_id)]"
+                lazy-rules="ondemand"
+                hide-bottom-space
               />
             </div>
           </div>
@@ -212,12 +266,7 @@
             <div class="row items-center q-mb-sm">
               <div class="text-subtitle1 text-weight-bold">Links</div>
               <q-space />
-              <q-btn
-                flat
-                icon="add"
-                label="Adicionar link"
-                @click="addLink"
-              />
+              <q-btn flat icon="add" label="Adicionar link" @click="addLink" />
             </div>
 
             <q-banner
@@ -249,7 +298,9 @@
                     outlined
                     dense
                     label="Tipo *"
-                    :rules="[v => !!v || 'Obrigatório']"
+                    :rules="[rules.required]"
+                    lazy-rules="ondemand"
+                    hide-bottom-space
                   />
 
                   <q-input
@@ -259,6 +310,11 @@
                     dense
                     label="Provider"
                     placeholder="uber, 99, bolt..."
+                    :maxlength="LIMITS.unit_link.provider"
+                    counter
+                    :rules="[rules.max(LIMITS.unit_link.provider)]"
+                    lazy-rules="ondemand"
+                    hide-bottom-space
                   />
 
                   <q-input
@@ -268,7 +324,11 @@
                     dense
                     label="URL *"
                     placeholder="https://..."
-                    :rules="[v => !!v || 'Obrigatório']"
+                    :maxlength="LIMITS.unit_link.url"
+                    counter
+                    :rules="[rules.required, rules.max(LIMITS.unit_link.url)]"
+                    lazy-rules="ondemand"
+                    hide-bottom-space
                   />
 
                   <q-input
@@ -278,17 +338,16 @@
                     dense
                     label="Label"
                     placeholder="Ex: Abrir no Maps"
+                    :maxlength="LIMITS.unit_link.label"
+                    counter
+                    :rules="[rules.max(LIMITS.unit_link.label)]"
+                    lazy-rules="ondemand"
+                    hide-bottom-space
                   />
 
                   <div class="col-12 col-md-3">
-                    <q-toggle
-                      v-model="l.is_primary"
-                      dense
-                      label="Principal"
-                    />
-                    <div class="text-caption text-grey-6">
-                      (por tipo)
-                    </div>
+                    <q-toggle v-model="l.is_primary" dense label="Principal" />
+                    <div class="text-caption text-grey-6">(por tipo)</div>
                   </div>
 
                   <div class="col-12 col-md-3 row justify-end">
@@ -332,7 +391,7 @@ defineOptions({ name: 'UnitEditorDialog' })
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
-  mode: { type: String, default: 'create' }, // 'create' | 'edit'
+  mode: { type: String, default: 'create' },
   company: { type: Object, required: true },
   value: {
     type: Object,
@@ -359,6 +418,32 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'save'])
 
+/**
+ * Limites (espelhando os models)
+ */
+const LIMITS = {
+  unit: {
+    name: 150,
+    phone: 25,
+    email: 120,
+    timezone: 60,
+    address_line1: 255,
+    address_line2: 255,
+    sublocality: 150,
+    locality: 150,
+    administrative_area: 100,
+    postal_code: 20,
+    place_id: 120
+  },
+  unit_link: {
+    type: 40,
+    provider: 40,
+    // url agora é TEXT no backend, mas colocamos um teto pra UX/segurança
+    url: 2048,
+    label: 80
+  }
+}
+
 const local = reactive(JSON.parse(JSON.stringify(props.value)))
 
 watch(
@@ -369,6 +454,15 @@ watch(
   },
   { deep: true }
 )
+
+/**
+ * Regras
+ */
+const rules = {
+  required: v => (!!v || v === 0) || 'Campo obrigatório',
+  email: v => !v || /.+@.+\..+/.test(v) || 'E-mail inválido', // permite vazio
+  max: (n) => (v) => !v || String(v).length <= n || `Máximo de ${n} caracteres`
+}
 
 /**
  * -------- País da COMPANY -> região -> máscara telefone --------
@@ -454,7 +548,7 @@ onMounted(async () => {
 })
 
 /**
- * Endereço: separar "Rua" e "Número" sem criar campo novo no backend.
+ * Endereço: separar "Rua" e "Número"
  */
 const addressNumber = ref('')
 
@@ -487,7 +581,9 @@ function buildLine1 (street, number) {
   if (!number) return streetNoNum
   if (!streetNoNum) return `${number}`
 
-  return `${streetNoNum}, ${String(number).trim()}`
+  // respeita limite do model (255)
+  const combined = `${streetNoNum}, ${String(number).trim()}`
+  return combined.slice(0, LIMITS.unit.address_line1)
 }
 
 const addressPreview = computed(() => {
@@ -557,8 +653,6 @@ function onSubmit () {
   border-radius: 14px;
 }
 @media (max-width: 900px) {
-  .editor-card {
-    min-width: auto;
-  }
+  .editor-card { min-width: auto; }
 }
 </style>
