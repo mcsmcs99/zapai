@@ -55,6 +55,8 @@
               dense
               label="Telefone"
               placeholder="+5547999999999"
+              :mask="phoneMask"
+              fill-mask
             />
 
             <q-input
@@ -324,12 +326,16 @@
 
 <script setup>
 import { reactive, ref, watch, computed, onMounted } from 'vue'
+import { useCountriesStore } from 'src/stores/countries'
+import { useMask } from 'src/composables/useMask'
+import { getRegionFromCountryName } from 'src/utils/region-from-country'
 
 defineOptions({ name: 'UnitEditorDialog' })
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   mode: { type: String, default: 'create' }, // 'create' | 'edit'
+  company: { type: Object, required: true },
   value: {
     type: Object,
     default: () => ({
@@ -338,20 +344,16 @@ const props = defineProps({
       phone: null,
       email: null,
       is_active: true,
-
       timezone: null,
-
       address_line1: null,
       address_line2: null,
       sublocality: null,
       locality: null,
       administrative_area: null,
       postal_code: null,
-
       latitude: null,
       longitude: null,
       place_id: null,
-
       unit_links: []
     })
   }
@@ -370,16 +372,46 @@ watch(
 )
 
 /**
+ * -------- País da COMPANY -> região -> máscara telefone --------
+ */
+const countriesStore = useCountriesStore()
+const allCountries = ref([])
+
+const currentCountry = computed(() => {
+  const countryId = props.company?.country_id
+  if (!countryId || !allCountries.value.length) return null
+  return allCountries.value.find(c => c.id === countryId) || null
+})
+
+const currentRegion = computed(() => {
+  return getRegionFromCountryName(currentCountry.value?.name)
+})
+
+const { mask: phoneMask } = useMask('phone', currentRegion)
+
+onMounted(async () => {
+  // garante países carregados (igual ao dialog de Company)
+  if (!countriesStore.items.length) {
+    await countriesStore.fetchCountries({
+      status: 'active',
+      order: 'name',
+      dir: 'asc',
+      pageSize: 9999
+    })
+  }
+  allCountries.value = (countriesStore.items || []).slice()
+
+  // init timezones
+  allTimezones.value = TZ_LIST.slice()
+  timezoneOptions.value = allTimezones.value
+})
+
+/**
  * -------- Timezone (select com opções) --------
  */
 const tzLoading = ref(false)
 const allTimezones = ref([])
 const timezoneOptions = ref([])
-
-onMounted(() => {
-  allTimezones.value = TZ_LIST.slice()
-  timezoneOptions.value = allTimezones.value
-})
 
 function filterTimezone (val, update) {
   update(() => {

@@ -153,6 +153,8 @@
     <!-- Modal de criar/editar -->
     <UnitEditorDialog
       v-model="dlg.open"
+      v-if="currentCompany"
+      :company="currentCompany"
       :mode="dlg.mode"
       :value="unitsStore.currentUnit"
       @save="saveUnit"
@@ -161,15 +163,22 @@
 </template>
 
 <script setup>
-import { reactive, onMounted } from 'vue'
+import { reactive, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useQuasar } from 'quasar'
 import UnitEditorDialog from 'components/UnitEditorDialog.vue'
 import { useUnitsStore } from 'src/stores/tenant/units'
+import { useOnboardingStore } from 'src/stores/onboarding'
 
 defineOptions({ name: 'UnitsPage' })
 
+const $q = useQuasar()
 const unitsStore = useUnitsStore()
 const { units } = storeToRefs(unitsStore)
+
+// mesma ideia do ProfilePage
+const ob = useOnboardingStore()
+const currentCompany = ref(null)
 
 /* Helpers */
 function shortAddress (u) {
@@ -190,21 +199,54 @@ function badgeLabel (l) {
   return `${l.type}${provider}`
 }
 
+/**
+ * Carrega empresa atual (mesma lógica do ProfilePage)
+ * e preenche currentCompany (cópia).
+ */
+async function loadCurrentCompany () {
+  await ob.loadFromSession()
+
+  const company = ob.company || {}
+
+  const hasMinimalCompany =
+    !!company.id && !!company.document_number
+
+  if (!hasMinimalCompany) {
+    $q.notify({
+      type: 'warning',
+      message: 'Nenhuma empresa encontrada para este usuário.'
+    })
+    currentCompany.value = null
+    return false
+  }
+
+  currentCompany.value = { ...company }
+  return true
+}
+
 /* Modal de criar/editar */
 const dlg = reactive({
   open: false,
   mode: 'create' // 'create' | 'edit'
 })
 
-function openCreate () {
+async function openCreate () {
   dlg.mode = 'create'
   unitsStore.resetCurrentUnit()
+
+  const ok = await loadCurrentCompany()
+  if (!ok) return
+
   dlg.open = true
 }
 
-function openEdit (row) {
+async function openEdit (row) {
   dlg.mode = 'edit'
   unitsStore.setCurrentUnit(row)
+
+  const ok = await loadCurrentCompany()
+  if (!ok) return
+
   dlg.open = true
 }
 
