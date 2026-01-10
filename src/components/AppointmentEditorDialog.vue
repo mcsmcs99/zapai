@@ -441,6 +441,10 @@ const slotOptions = computed(() => {
 
   if (!day || day.closed) return []
 
+  const isToday = dateISO === todayISO()
+  const now = new Date()
+  const nowMin = now.getHours() * 60 + now.getMinutes()
+
   const slots = []
 
   for (const it of (day.intervals || [])) {
@@ -453,10 +457,14 @@ const slotOptions = computed(() => {
 
       const isBusy = overlapsAnyBusy(t, t + duration)
 
+      const isPastToday = isToday && t <= nowMin
+
+      const disabled = isBusy || isPastToday
+
       slots.push({
-        label: isBusy ? `${s} - ${e} (Indisponível)` : `${s} - ${e}`,
+        label: disabled ? `${s} - ${e} (Indisponível)` : `${s} - ${e}`,
         value: s,
-        disable: isBusy
+        disable: disabled
       })
     }
   }
