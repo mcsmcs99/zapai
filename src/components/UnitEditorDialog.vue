@@ -98,7 +98,6 @@
             </div>
 
             <div class="row q-col-gutter-md">
-              <!-- Postal no início (sem País) -->
               <q-input
                 class="col-12"
                 v-model="local.postal_code"
@@ -108,7 +107,6 @@
                 placeholder="89010-000"
               />
 
-              <!-- Endereço mais “compreensível” -->
               <q-input
                 class="col-12 col-md-8"
                 v-model="local.address_line1"
@@ -164,7 +162,6 @@
               />
             </div>
 
-            <!-- Dica visual: preview do endereço -->
             <div class="q-mt-sm text-caption text-grey-7">
               <q-icon name="info" class="q-mr-xs" />
               <span class="text-weight-medium">Pré-visualização:</span>
@@ -329,6 +326,7 @@ import { reactive, ref, watch, computed, onMounted } from 'vue'
 import { useCountriesStore } from 'src/stores/countries'
 import { useMask } from 'src/composables/useMask'
 import { getRegionFromCountryName } from 'src/utils/region-from-country'
+import { useTimezones } from 'src/composables/useTimezones'
 
 defineOptions({ name: 'UnitEditorDialog' })
 
@@ -368,7 +366,8 @@ watch(
   v => {
     Object.assign(local, JSON.parse(JSON.stringify(v || {})))
     addressNumber.value = extractNumberFromLine1(local.address_line1)
-  }
+  },
+  { deep: true }
 )
 
 /**
@@ -377,20 +376,72 @@ watch(
 const countriesStore = useCountriesStore()
 const allCountries = ref([])
 
+const companyCountryId = computed(() => props.company?.country_id || null)
+
 const currentCountry = computed(() => {
-  const countryId = props.company?.country_id
-  if (!countryId || !allCountries.value.length) return null
-  return allCountries.value.find(c => c.id === countryId) || null
+  if (!companyCountryId.value || !allCountries.value.length) return null
+  return allCountries.value.find(c => c.id === companyCountryId.value) || null
 })
 
-const currentRegion = computed(() => {
-  return getRegionFromCountryName(currentCountry.value?.name)
+// aqui a gente usa sua função existente (mesma ideia do CompanyDialog)
+const countryCode = computed(() => {
+  // precisa ser alpha2 (BR/US/PT...). Se não achar, cai no BR.
+  return getRegionFromCountryName(currentCountry.value?.name) || 'BR'
 })
 
-const { mask: phoneMask } = useMask('phone', currentRegion)
+const { mask: phoneMask } = useMask('phone', countryCode)
+
+/**
+ * -------- Timezones (via useTimezones) --------
+ */
+const tzLoading = ref(false)
+
+// useTimezones devolve um ref `options`
+const { options: tzOptions } = useTimezones(countryCode)
+
+// base + lista usada no select
+const _tzBase = ref([])
+const timezoneOptions = ref([])
+
+watch(
+  () => tzOptions.value,
+  (list) => {
+    timezoneOptions.value = Array.isArray(list) ? list : []
+    _tzBase.value = timezoneOptions.value.slice()
+
+    // se o timezone atual não existir na lista, limpa
+    if (local.timezone && !_tzBase.value.some(t => t.value === local.timezone)) {
+      local.timezone = null
+    }
+  },
+  { immediate: true, deep: true }
+)
+
+// como agora as opções são síncronas (vêm da lib), loading fica falso
+watch(
+  () => countryCode.value,
+  () => { tzLoading.value = false },
+  { immediate: true }
+)
+
+function filterTimezone (val, update) {
+  update(() => {
+    const base = _tzBase.value
+
+    if (!val) {
+      timezoneOptions.value = base
+      return
+    }
+    const needle = val.toLowerCase()
+    timezoneOptions.value = base.filter(o =>
+      `${o.label}`.toLowerCase().includes(needle) ||
+      `${o.value}`.toLowerCase().includes(needle)
+    )
+  })
+}
 
 onMounted(async () => {
-  // garante países carregados (igual ao dialog de Company)
+  // garante países carregados
   if (!countriesStore.items.length) {
     await countriesStore.fetchCountries({
       status: 'active',
@@ -400,36 +451,10 @@ onMounted(async () => {
     })
   }
   allCountries.value = (countriesStore.items || []).slice()
-
-  // init timezones
-  allTimezones.value = TZ_LIST.slice()
-  timezoneOptions.value = allTimezones.value
 })
 
 /**
- * -------- Timezone (select com opções) --------
- */
-const tzLoading = ref(false)
-const allTimezones = ref([])
-const timezoneOptions = ref([])
-
-function filterTimezone (val, update) {
-  update(() => {
-    if (!val) {
-      timezoneOptions.value = allTimezones.value
-      return
-    }
-    const needle = val.toLowerCase()
-    timezoneOptions.value = allTimezones.value.filter(o =>
-      `${o.label}`.toLowerCase().includes(needle) ||
-      `${o.value}`.toLowerCase().includes(needle)
-    )
-  })
-}
-
-/**
  * Endereço: separar "Rua" e "Número" sem criar campo novo no backend.
- * - address_line1 vai ser salvo como "Rua, Número" quando número existir.
  */
 const addressNumber = ref('')
 
@@ -523,47 +548,6 @@ function onSubmit () {
   emit('save', JSON.parse(JSON.stringify(local)))
   emit('update:modelValue', false)
 }
-
-// Lista ampla (comum) de timezones IANA
-const TZ_LIST = [
-  { label: 'America/Sao_Paulo (Brasil)', value: 'America/Sao_Paulo' },
-  { label: 'America/Fortaleza (Brasil)', value: 'America/Fortaleza' },
-  { label: 'America/Manaus (Brasil)', value: 'America/Manaus' },
-  { label: 'America/Recife (Brasil)', value: 'America/Recife' },
-  { label: 'America/Cuiaba (Brasil)', value: 'America/Cuiaba' },
-  { label: 'America/Belem (Brasil)', value: 'America/Belem' },
-  { label: 'America/Rio_Branco (Brasil)', value: 'America/Rio_Branco' },
-  { label: 'America/New_York (US)', value: 'America/New_York' },
-  { label: 'America/Chicago (US)', value: 'America/Chicago' },
-  { label: 'America/Denver (US)', value: 'America/Denver' },
-  { label: 'America/Los_Angeles (US)', value: 'America/Los_Angeles' },
-  { label: 'America/Toronto (CA)', value: 'America/Toronto' },
-  { label: 'America/Mexico_City (MX)', value: 'America/Mexico_City' },
-  { label: 'America/Buenos_Aires (AR)', value: 'America/Argentina/Buenos_Aires' },
-  { label: 'Europe/Lisbon (PT)', value: 'Europe/Lisbon' },
-  { label: 'Europe/Madrid (ES)', value: 'Europe/Madrid' },
-  { label: 'Europe/London (UK)', value: 'Europe/London' },
-  { label: 'Europe/Paris (FR)', value: 'Europe/Paris' },
-  { label: 'Europe/Berlin (DE)', value: 'Europe/Berlin' },
-  { label: 'Europe/Rome (IT)', value: 'Europe/Rome' },
-  { label: 'Europe/Amsterdam (NL)', value: 'Europe/Amsterdam' },
-  { label: 'Europe/Zurich (CH)', value: 'Europe/Zurich' },
-  { label: 'Africa/Johannesburg (ZA)', value: 'Africa/Johannesburg' },
-  { label: 'Africa/Lagos (NG)', value: 'Africa/Lagos' },
-  { label: 'Asia/Dubai (AE)', value: 'Asia/Dubai' },
-  { label: 'Asia/Riyadh (SA)', value: 'Asia/Riyadh' },
-  { label: 'Asia/Kolkata (IN)', value: 'Asia/Kolkata' },
-  { label: 'Asia/Bangkok (TH)', value: 'Asia/Bangkok' },
-  { label: 'Asia/Singapore (SG)', value: 'Asia/Singapore' },
-  { label: 'Asia/Hong_Kong (HK)', value: 'Asia/Hong_Kong' },
-  { label: 'Asia/Shanghai (CN)', value: 'Asia/Shanghai' },
-  { label: 'Asia/Tokyo (JP)', value: 'Asia/Tokyo' },
-  { label: 'Asia/Seoul (KR)', value: 'Asia/Seoul' },
-  { label: 'Australia/Sydney (AU)', value: 'Australia/Sydney' },
-  { label: 'Australia/Melbourne (AU)', value: 'Australia/Melbourne' },
-  { label: 'Pacific/Auckland (NZ)', value: 'Pacific/Auckland' },
-  { label: 'UTC', value: 'UTC' }
-]
 </script>
 
 <style scoped>
