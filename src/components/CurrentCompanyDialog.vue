@@ -43,6 +43,7 @@
         <q-form @submit.prevent="onSubmit" ref="formRef" class="q-gutter-md">
           <div class="row q-col-gutter-md company-fields-grid">
 
+            <!-- País -->
             <q-select
               class="col-12 col-md-6 company-field"
               v-model="localCompany.country_id"
@@ -63,6 +64,48 @@
               :loading="countriesStore.loading"
               clearable
               @filter="filterCountries"
+            />
+
+            <!-- Locale -->
+            <q-select
+              class="col-12 col-md-3 company-field"
+              v-model="localCompany.locale"
+              :options="localeOptions"
+              option-label="label"
+              option-value="value"
+              emit-value
+              map-options
+              use-input
+              fill-input
+              hide-selected
+              input-debounce="200"
+              outlined
+              dense
+              clearable
+              label="Locale"
+              :loading="localeLoading"
+              @filter="filterLocale"
+            />
+
+            <!-- Moeda -->
+            <q-select
+              class="col-12 col-md-3 company-field"
+              v-model="localCompany.currency_code"
+              :options="currencyOptions"
+              option-label="label"
+              option-value="value"
+              emit-value
+              map-options
+              use-input
+              fill-input
+              hide-selected
+              input-debounce="200"
+              outlined
+              dense
+              clearable
+              label="Moeda"
+              :loading="currencyLoading"
+              @filter="filterCurrency"
             />
 
             <q-input
@@ -198,6 +241,8 @@ const req = v => !!v || 'Obrigatório'
 const localCompany = reactive({
   id: null,
   country_id: null,
+  locale: null,
+  currency_code: null,
   company_name: '',
   company_fantasy_name: '',
   document_number: '',
@@ -230,6 +275,11 @@ watch(
     if (!val) return
     // formulário edita uma cópia
     Object.assign(localCompany, val)
+
+    // garante defaults (caso backend ainda não mande)
+    if (typeof localCompany.locale === 'undefined') localCompany.locale = null
+    if (typeof localCompany.currency_code === 'undefined') localCompany.currency_code = null
+
     // header mostra apenas o último estado salvo vindo da prop
     headerCompany.company_name = val.company_name || ''
     headerCompany.company_fantasy_name = val.company_fantasy_name || ''
@@ -263,7 +313,45 @@ const cnpjLocalRule = (value) => {
   return cnpjRule(value)
 }
 
-// carrega TODOS os países ao montar
+// ------- Locale / Moeda (select com busca) -------
+const localeLoading = ref(false)
+const currencyLoading = ref(false)
+
+const allLocales = ref([])
+const localeOptions = ref([])
+
+const allCurrencies = ref([])
+const currencyOptions = ref([])
+
+function filterLocale (val, update) {
+  update(() => {
+    if (!val) {
+      localeOptions.value = allLocales.value
+      return
+    }
+    const needle = val.toLowerCase()
+    localeOptions.value = allLocales.value.filter(o =>
+      `${o.label}`.toLowerCase().includes(needle) ||
+      `${o.value}`.toLowerCase().includes(needle)
+    )
+  })
+}
+
+function filterCurrency (val, update) {
+  update(() => {
+    if (!val) {
+      currencyOptions.value = allCurrencies.value
+      return
+    }
+    const needle = val.toLowerCase()
+    currencyOptions.value = allCurrencies.value.filter(o =>
+      `${o.label}`.toLowerCase().includes(needle) ||
+      `${o.value}`.toLowerCase().includes(needle)
+    )
+  })
+}
+
+// carrega TODOS os países ao montar + inicializa locale/moeda
 onMounted(async () => {
   if (!countriesStore.items.length) {
     await countriesStore.fetchCountries({
@@ -276,6 +364,13 @@ onMounted(async () => {
 
   allCountries.value = (countriesStore.items || []).slice()
   countryOptions.value = allCountries.value
+
+  // init locale/moeda
+  allLocales.value = LOCALE_LIST.slice()
+  localeOptions.value = allLocales.value
+
+  allCurrencies.value = CURRENCY_LIST.slice()
+  currencyOptions.value = allCurrencies.value
 })
 
 function filterCountries (val, update) {
@@ -308,6 +403,49 @@ async function onSubmit () {
     loading.value = false
   }
 }
+
+// Locales comuns (se quiser “todas do mundo”, melhor externalizar para asset)
+const LOCALE_LIST = [
+  { label: 'Português (Brasil) - pt-BR', value: 'pt-BR' },
+  { label: 'Português (Portugal) - pt-PT', value: 'pt-PT' },
+  { label: 'English (US) - en-US', value: 'en-US' },
+  { label: 'English (UK) - en-GB', value: 'en-GB' },
+  { label: 'Español (ES) - es-ES', value: 'es-ES' },
+  { label: 'Español (AR) - es-AR', value: 'es-AR' },
+  { label: 'Français (FR) - fr-FR', value: 'fr-FR' },
+  { label: 'Deutsch (DE) - de-DE', value: 'de-DE' },
+  { label: 'Italiano (IT) - it-IT', value: 'it-IT' },
+  { label: 'Nederlands (NL) - nl-NL', value: 'nl-NL' },
+  { label: '日本語 (JP) - ja-JP', value: 'ja-JP' },
+  { label: '한국어 (KR) - ko-KR', value: 'ko-KR' },
+  { label: '中文 (CN) - zh-CN', value: 'zh-CN' }
+]
+
+// Moedas (ampla; se quiser 100% ISO-4217, melhor externalizar para asset)
+const CURRENCY_LIST = [
+  { label: 'BRL - Real', value: 'BRL' },
+  { label: 'USD - US Dollar', value: 'USD' },
+  { label: 'EUR - Euro', value: 'EUR' },
+  { label: 'GBP - Pound Sterling', value: 'GBP' },
+  { label: 'CAD - Canadian Dollar', value: 'CAD' },
+  { label: 'AUD - Australian Dollar', value: 'AUD' },
+  { label: 'NZD - New Zealand Dollar', value: 'NZD' },
+  { label: 'ARS - Argentine Peso', value: 'ARS' },
+  { label: 'CLP - Chilean Peso', value: 'CLP' },
+  { label: 'COP - Colombian Peso', value: 'COP' },
+  { label: 'MXN - Mexican Peso', value: 'MXN' },
+  { label: 'PEN - Peruvian Sol', value: 'PEN' },
+  { label: 'UYU - Uruguayan Peso', value: 'UYU' },
+  { label: 'JPY - Japanese Yen', value: 'JPY' },
+  { label: 'CNY - Chinese Yuan', value: 'CNY' },
+  { label: 'HKD - Hong Kong Dollar', value: 'HKD' },
+  { label: 'SGD - Singapore Dollar', value: 'SGD' },
+  { label: 'KRW - South Korean Won', value: 'KRW' },
+  { label: 'INR - Indian Rupee', value: 'INR' },
+  { label: 'AED - UAE Dirham', value: 'AED' },
+  { label: 'SAR - Saudi Riyal', value: 'SAR' },
+  { label: 'ZAR - South African Rand', value: 'ZAR' }
+]
 </script>
 
 <style scoped>

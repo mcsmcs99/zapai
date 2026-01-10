@@ -96,6 +96,7 @@ const main = [
   { label: 'Meus Assistentes',       icon: 'smart_toy',             to: '/assistants' },
   { label: 'Conversas',              icon: 'chat_bubble',           to: '/conversations' },
   { label: 'Agendamentos',           icon: 'calendar_month',        to: '/appointments' },
+  { label: 'Unidades',               icon: 'other_houses',          to: '/units' },
   { label: 'Serviços',               icon: 'construction',          to: '/services' },
   { label: 'Colaboradores',          icon: 'group',                 to: '/staff' },
   { label: 'Receitas do negócio',    icon: 'attach_money',          to: '/business-revenues' },
