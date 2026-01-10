@@ -150,13 +150,11 @@
                   <q-btn flat dense round icon="more_vert">
                     <q-menu>
                       <q-list style="min-width: 170px">
-                        <!-- sempre -->
                         <q-item clickable @click="view(a)">
                           <q-item-section avatar><q-icon name="visibility" /></q-item-section>
                           <q-item-section>Ver detalhes</q-item-section>
                         </q-item>
 
-                        <!-- só se puder editar -->
                         <q-item v-if="canEdit(a)" clickable @click="reschedule(a)">
                           <q-item-section avatar><q-icon name="event_available" /></q-item-section>
                           <q-item-section>Remarcar</q-item-section>
@@ -164,7 +162,6 @@
 
                         <q-separator v-if="canEdit(a)" />
 
-                        <!-- só se puder editar -->
                         <q-item v-if="canEdit(a)" clickable class="text-negative" @click="cancel(a)">
                           <q-item-section avatar><q-icon name="cancel" /></q-item-section>
                           <q-item-section>Cancelar</q-item-section>
@@ -186,8 +183,9 @@
       :mode="dlg.mode"
       :value="dlg.value"
       :services="services"
-      :staff="staff"
+      :staff="staffForDialog"
       :appointments="appointments"
+      :staffByServiceId="staffByServiceId"
       @save="onSaveAppointment"
     />
 
@@ -232,6 +230,11 @@ const { services } = storeToRefs(servicesStore)
 const { staff } = storeToRefs(staffStore)
 const { appointments } = storeToRefs(appointmentsStore)
 
+/** ✅ só ativos (evita agendar com inativo) */
+const activeStaff = computed(() =>
+  (staff.value || []).filter(s => s.status === 'active')
+)
+
 const serviceById = computed(() => {
   const map = new Map()
   for (const s of (services.value || [])) map.set(Number(s.id), s)
@@ -244,6 +247,49 @@ const staffById = computed(() => {
   return map
 })
 
+/**
+ * ✅ helper: retorna staff válido para um serviceId
+ * usa a nova regra: service.collaboratorIds (pivot)
+ */
+function getStaffForService (serviceId) {
+  const s = serviceById.value.get(Number(serviceId))
+  const ids = Array.isArray(s?.collaboratorIds) ? s.collaboratorIds.map(Number) : []
+  if (!ids.length) return []
+  return activeStaff.value.filter(p => ids.includes(Number(p.id)))
+}
+
+/**
+ * ✅ mapa pronto: { [serviceId]: staff[] }
+ * (é útil pro dialog filtrar rapidamente sem duplicar lógica)
+ */
+const staffByServiceId = computed(() => {
+  const out = {}
+  for (const s of (services.value || [])) {
+    out[Number(s.id)] = getStaffForService(s.id)
+  }
+  return out
+})
+
+/**
+ * ✅ staff enviado ao dialog:
+ * - se está edit/view e tem service_id, manda staff já filtrado pelo serviço
+ * - senão manda staff ativo inteiro (create sem serviço selecionado ainda)
+ */
+const staffForDialog = computed(() => {
+  const serviceId =
+    dlg?.value?.service_id ??
+    dlg?.value?.serviceId ??
+    null
+
+  if (serviceId) {
+    const filtered = getStaffForService(serviceId)
+    // se não tiver vínculo ainda, cai no ativo (pra não travar a UI)
+    return filtered.length ? filtered : activeStaff.value
+  }
+
+  return activeStaff.value
+})
+
 const appointmentsEnriched = computed(() => {
   return (appointments.value || []).map(a => {
     const serviceId = Number(a.service_id ?? a.serviceId ?? 0)
@@ -254,12 +300,8 @@ const appointmentsEnriched = computed(() => {
 
     return {
       ...a,
-
-      // nomes para apresentar
       service: s?.title || 'Serviço não encontrado',
       collaborator: c?.name || 'Colaborador não encontrado',
-
-      // cliente (se não vier do backend, cai no fallback)
       customer:
         a.customer_name ??
         a.customerName ??
@@ -269,22 +311,21 @@ const appointmentsEnriched = computed(() => {
   })
 })
 
-
 /* -------- dialog (create/edit/view) -------- */
 const dlg = reactive({
   open: false,
-  mode: 'create', // 'create' | 'edit' | 'view'
+  mode: 'create',
   value: null
 })
 
 function openNewAppointment () {
+  appointmentsStore.resetCurrentAppointment()
   dlg.mode = 'create'
   dlg.value = null
   dlg.open = true
 }
 
 async function onSaveAppointment (payload) {
-  // create/edit dependendo do mode
   let resp
   if (dlg.mode === 'edit' && dlg.value?.id) {
     resp = await appointmentsStore.updateAppointment(dlg.value.id, payload)
@@ -309,7 +350,6 @@ function isFinalStatus (a) {
 }
 
 function canEdit (a) {
-  // hoje/futuro e não finalizado/cancelado
   return !isPastDate(a) && !isFinalStatus(a)
 }
 
@@ -324,14 +364,16 @@ const isoToBR = (iso) => {
 function mapRowToDialogValue (a) {
   return {
     id: a.id,
-
-    // ✅ fallbacks
     service_id: a.service_id ?? a.serviceId ?? null,
     collaborator_id: a.collaborator_id ?? a.collaboratorId ?? null,
 
     dateBR: isoToBR(a.date),
     start: a.start ?? '',
-    customer_name: a.customer_name ?? a.customerName ?? a.customer ?? ''
+    end: a.end ?? '',
+    price: a.price ?? 0,
+
+    customer_name: a.customer_name ?? a.customerName ?? a.customer ?? '',
+    status: a.status ?? 'pending'
   }
 }
 
@@ -395,7 +437,6 @@ const collabOpts = computed(() => {
   return [{ label: 'Todos', value: 'all' }, ...set.map(x => ({ label: x, value: x }))]
 })
 
-
 const serviceOpts = computed(() => {
   const set = Array.from(new Set((appointmentsEnriched.value || []).map(a => a.service)))
     .filter(Boolean)
@@ -418,7 +459,6 @@ const isoToLocalDate = (iso) => {
   if (!iso) return null
   const [y, m, d] = String(iso).split('-').map(Number)
   if (!y || !m || !d) return null
-  // meio-dia local evita shift de fuso
   return new Date(y, m - 1, d, 12, 0, 0)
 }
 
@@ -437,7 +477,6 @@ const filteredFlat = computed(() => {
   const from = parseBR(f.value.from)
   const to = parseBR(f.value.to)
 
-  // normaliza from/to para meio-dia também (evita edge case)
   const norm = (dt) => (dt ? new Date(dt.getFullYear(), dt.getMonth(), dt.getDate(), 12, 0, 0) : null)
   const fromN = norm(from)
   const toN = norm(to)
@@ -491,10 +530,6 @@ onMounted(async () => {
   await servicesStore.fetchServices()
   await staffStore.fetchStaff()
   await appointmentsStore.fetchAppointments()
-
-  console.log(services.value)
-  console.log(staff.value)
-  console.log(appointments.value)
 })
 </script>
 

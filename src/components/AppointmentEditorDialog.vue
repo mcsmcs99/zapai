@@ -142,6 +142,7 @@
     </q-card>
   </q-dialog>
 </template>
+
 <script setup>
 import { reactive, watch, computed } from 'vue'
 
@@ -155,7 +156,10 @@ const props = defineProps({
 
   services: { type: Array, default: () => [] },
   staff: { type: Array, default: () => [] },
-  appointments: { type: Array, default: () => [] }
+  appointments: { type: Array, default: () => [] },
+
+  // ✅ opcional (se você passar da page, ajuda, mas não é obrigatório)
+  staffByServiceId: { type: Object, default: () => ({}) }
 })
 
 const emit = defineEmits(['update:modelValue', 'save'])
@@ -184,11 +188,11 @@ function resetLocal () {
 }
 
 function fillFromValue (v) {
-  local.service_id = v?.service_id ?? null
-  local.collaborator_id = v?.collaborator_id ?? null
+  local.service_id = v?.service_id ?? v?.serviceId ?? null
+  local.collaborator_id = v?.collaborator_id ?? v?.collaboratorId ?? null
   local.dateBR = v?.dateBR ?? ''
   local.start = v?.start ?? ''
-  local.customer_name = v?.customer_name ?? ''
+  local.customer_name = v?.customer_name ?? v?.customerName ?? ''
 }
 
 watch(
@@ -196,13 +200,11 @@ watch(
   (open) => {
     if (!open) return
 
-    // view/edit: preenche do value
     if (props.value) {
       fillFromValue(props.value)
       return
     }
 
-    // create: reseta e já seta hoje
     resetLocal()
     local.dateBR = todayBR()
   }
@@ -266,32 +268,129 @@ const serviceOptions = computed(() =>
   activeServices.value.map(s => ({ label: s.title, value: s.id }))
 )
 
-const selectedService = computed(() =>
-  activeServices.value.find(s => s.id === local.service_id) || null
-)
+const selectedService = computed(() => {
+  const id = local.service_id
+  if (!id) return null
+  return activeServices.value.find(s => Number(s.id) === Number(id)) || null
+})
 
-const selectedCollaborator = computed(() =>
-  activeStaff.value.find(c => c.id === local.collaborator_id) || null
-)
+const selectedCollaborator = computed(() => {
+  const id = local.collaborator_id
+  if (!id) return null
+  return activeStaff.value.find(c => Number(c.id) === Number(id)) || null
+})
+
+/**
+ * ✅ normaliza ids vindos do serviço:
+ * - novo: collaboratorIds (array)
+ * - legado: collaborator_ids (array/json)
+ */
+function getServiceCollaboratorIds (service) {
+  if (!service) return []
+  const raw =
+    service.collaboratorIds ??
+    service.collaborator_ids ??
+    []
+
+  if (Array.isArray(raw)) return raw.map(Number).filter(n => Number.isFinite(n))
+
+  // fallback: se vier string JSON ou CSV
+  if (typeof raw === 'string') {
+    const s = raw.trim()
+    if (!s) return []
+    try {
+      const j = JSON.parse(s)
+      if (Array.isArray(j)) return j.map(Number).filter(n => Number.isFinite(n))
+    } catch (e) {console.warn(e)}
+    return s
+      .split(',')
+      .map(x => Number(String(x).trim()))
+      .filter(n => Number.isFinite(n))
+  }
+
+  return []
+}
 
 const collaboratorOptions = computed(() => {
   if (!selectedService.value) return []
-  const ids = selectedService.value.collaborator_ids || selectedService.value.collaboratorIds || []
+
+  // ✅ se a page mandou mapa pronto, usa (não é obrigatório)
+  const mapped = props.staffByServiceId?.[Number(selectedService.value.id)]
+  if (Array.isArray(mapped) && mapped.length) {
+    return mapped.map(c => ({ label: c.name, value: c.id }))
+  }
+
+  const ids = new Set(getServiceCollaboratorIds(selectedService.value))
   return activeStaff.value
-    .filter(c => ids.includes(c.id))
+    .filter(c => ids.has(Number(c.id)))
     .map(c => ({ label: c.name, value: c.id }))
 })
+
+/**
+ * ✅ resets encadeados:
+ * - trocou serviço -> zera colaborador e dependências
+ * - trocou colaborador -> zera data e slots
+ * - trocou data -> zera slot
+ *
+ * (mantém as lógicas atuais, só evita ficar com seleção inválida)
+ */
+watch(
+  () => local.service_id,
+  (newVal, oldVal) => {
+    if (!props.modelValue) return
+    if (Number(newVal || 0) === Number(oldVal || 0)) return
+
+    local.collaborator_id = null
+    local.dateBR = props.mode === 'create' ? todayBR() : ''
+    local.start = ''
+  }
+)
+
+watch(
+  () => local.collaborator_id,
+  (newVal, oldVal) => {
+    if (!props.modelValue) return
+    if (Number(newVal || 0) === Number(oldVal || 0)) return
+
+    // colaborador muda -> data/slot precisam ser revalidos
+    local.dateBR = props.mode === 'create' ? todayBR() : local.dateBR
+    local.start = ''
+  }
+)
+
+watch(
+  () => local.dateBR,
+  (newVal, oldVal) => {
+    if (!props.modelValue) return
+    if (String(newVal || '') === String(oldVal || '')) return
+    local.start = ''
+  }
+)
+
+/** se o colaborador selecionado não estiver mais disponível para o serviço, limpa */
+watch(
+  () => collaboratorOptions.value,
+  (opts) => {
+    if (!local.collaborator_id) return
+    const ok = (opts || []).some(o => Number(o.value) === Number(local.collaborator_id))
+    if (!ok) {
+      local.collaborator_id = null
+      local.start = ''
+    }
+  }
+)
 
 const canShowSlots = computed(() =>
   !!local.service_id && !!local.collaborator_id && !!toISOFromBR(local.dateBR)
 )
+
+const currentAppointmentId = computed(() => props.value?.id ?? null)
 
 const busyRanges = computed(() => {
   if (!canShowSlots.value) return []
 
   const dateISO = toISOFromBR(local.dateBR)
 
-  // aceita tanto array direto quanto { data: [...] }
   const list = Array.isArray(props.appointments)
     ? props.appointments
     : (props.appointments?.data || [])
@@ -300,17 +399,15 @@ const busyRanges = computed(() => {
     .filter(a => {
       const aDate = a.date
       const aStatus = a.status
-
-      // regra de ativo: bloqueia tudo que NÃO for cancelled
       const isActive = aStatus !== 'cancelled'
 
       const aCollabId = (a.collaborator_id ?? a.collaboratorId)
       const sameCollab = Number(aCollabId) === Number(local.collaborator_id)
-
       const sameDay = aDate === dateISO
 
-      // se estiver editando, ignora o próprio agendamento
-      const isSameRecord = currentAppointmentId.value && Number(a.id) === Number(currentAppointmentId.value)
+      const isSameRecord =
+        currentAppointmentId.value &&
+        Number(a.id) === Number(currentAppointmentId.value)
 
       return sameDay && sameCollab && isActive && !isSameRecord
     })
@@ -318,11 +415,8 @@ const busyRanges = computed(() => {
       startMin: toMin(a.start),
       endMin: toMin(a.end)
     }))
-    // sanidade: remove ranges inválidos
     .filter(r => Number.isFinite(r.startMin) && Number.isFinite(r.endMin) && r.endMin > r.startMin)
 })
-
-const currentAppointmentId = computed(() => props.value?.id ?? null)
 
 function overlapsAnyBusy (startMin, endMin) {
   for (const b of busyRanges.value) {
@@ -348,6 +442,7 @@ const slotOptions = computed(() => {
   if (!day || day.closed) return []
 
   const slots = []
+
   for (const it of (day.intervals || [])) {
     const start = toMin(it.start)
     const end = toMin(it.end)
@@ -383,9 +478,7 @@ const canSubmit = computed(() => {
   if (!canShowSlots.value) return false
   if (!local.start) return false
 
-  // no create exige nome; no edit não exige
   if (props.mode === 'create' && !local.customer_name.trim()) return false
-
   return true
 })
 
@@ -394,12 +487,14 @@ function onSubmit () {
   const dateISO = toISOFromBR(local.dateBR)
   if (!service || !dateISO) return
 
+  const duration = Number(service.duration || 0)
   const startMin = toMin(local.start)
-  const endMin = startMin + Number(service.duration || 0)
+  const endMin = startMin + duration
+
+  if (!duration || duration <= 0) return
 
   // Hard-block: se conflitar, não salva
   if (overlapsAnyBusy(startMin, endMin)) {
-    // Notify.create({ type: 'negative', message: 'Horário indisponível para este colaborador.' })
     return
   }
 
@@ -408,10 +503,10 @@ function onSubmit () {
     collaborator_id: Number(local.collaborator_id),
     date: dateISO,
     start: local.start,
-    end: toHHMM(endMin),
+    end: toHHMM(endMin)
   }
 
-  // só envia customer_name no create
+  // create: envia customer_name e price
   if (props.mode === 'create') {
     payload.customer_name = local.customer_name.trim()
     payload.price = Number(service.price ?? 0)
@@ -420,7 +515,6 @@ function onSubmit () {
   emit('save', payload)
   emit('update:modelValue', false)
 }
-
 </script>
 
 <style scoped>
@@ -434,17 +528,11 @@ function onSubmit () {
   .editor-card { min-width: auto; }
 }
 
-/* container com largura controlada pros horários */
 .slots-wrap {
   width: 100%;
-  max-width: 520px; /* ajuste aqui conforme seu gosto (ex.: 480~600) */
+  max-width: 520px;
 }
 
-/* deixa os radios em coluna e evita esticar */
-.slots-group :deep(.q-option-group) {
-  width: 100%;
-}
-.slots-group :deep(.q-radio) {
-  width: 100%;
-}
+.slots-group :deep(.q-option-group) { width: 100%; }
+.slots-group :deep(.q-radio) { width: 100%; }
 </style>

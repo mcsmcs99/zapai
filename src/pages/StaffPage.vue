@@ -183,14 +183,6 @@ function workDays (schedule) {
     return acc + (day && day.closed === false ? 1 : 0)
   }, 0)
 }
-function buildServiceIdsFromServices (staffId) {
-  const out = []
-  for (const s of servicesStore.services || []) {
-    const ids = Array.isArray(s.collaboratorIds) ? s.collaboratorIds : []
-    if (ids.includes(staffId)) out.push(s.id)
-  }
-  return out
-}
 
 /* ------- editor (modal completa) ------- */
 const editor = reactive({
@@ -205,64 +197,33 @@ function openCreate () {
   editor.open = true
 }
 
-function openEdit (row) {
+async function openEdit (row) {
   editor.mode = 'edit'
-  // garante que a estrutura do schedule está normalizada pelo dialog
-  const serviceIds = buildServiceIdsFromServices(row.id)
-  staffStore.setCurrentStaff({ ...row, serviceIds })
+
+  // IMPORTANT: buscar por ID pra garantir serviceIds vindo do backend (pivot)
+  await staffStore.fetchStaffById(row.id)
+
   editor.open = true
 }
 
-function openAgenda (row) {
-  openEdit(row)
-  // foca na seção de horários quando a modal abrir
-  setTimeout(() => editorRef.value?.focusWork(), 60)
-}
-
-async function syncStaffServices (staffId, selectedServiceIds = []) {
-  const selected = new Set((selectedServiceIds || []).map(Number))
-  const all = servicesStore.services || []
-
-  const tasks = []
-
-  for (const s of all) {
-    const current = Array.isArray(s.collaboratorIds) ? [...s.collaboratorIds].map(Number) : []
-    const has = current.includes(Number(staffId))
-    const shouldHave = selected.has(Number(s.id))
-
-    if (shouldHave && !has) {
-      tasks.push(
-        servicesStore.updateService(s.id, { collaboratorIds: [...current, Number(staffId)] })
-      )
-    } else if (!shouldHave && has) {
-      tasks.push(
-        servicesStore.updateService(s.id, { collaboratorIds: current.filter(id => id !== Number(staffId)) })
-      )
-    }
-  }
-
-  if (tasks.length) {
-    const results = await Promise.all(tasks)
-    const failed = results.filter(r => !r?.ok)
-    if (failed.length) {
-      // opcional: você pode notificar aqui se quiser
-      console.warn('Algumas atualizações de serviços falharam:', failed)
-    }
-    await servicesStore.fetchServices()
-  }
+async function openAgenda (row) {
+  await openEdit(row)
+  setTimeout(() => editorRef.value?.focusWork?.(), 60)
 }
 
 async function saveStaff (data) {
+  // o dialog devolve currentStaff já com serviceIds
   staffStore.setCurrentStaff(data)
+
   const resp = await staffStore.saveCurrentStaff()
   if (!resp.ok) return
-
-  const staffId = resp.data?.id || staffStore.currentStaff.id
-  await syncStaffServices(staffId, data.serviceIds || [])
 
   if (resp.ok && editor.mode === 'create') {
     await staffStore.fetchStaff()
   }
+
+  // opcional: se algum lugar depende da lista de services atualizada
+  // await servicesStore.fetchServices()
 }
 
 /* ------- remover / ativar ------- */
@@ -275,13 +236,16 @@ function confirmRemove (row) {
 
 async function remove () {
   if (!rm.row) return
+
   const resp = await staffStore.deleteStaff(rm.row.id)
   if (resp.ok) {
     // se o store já removeu localmente, só fecha
     rm.open = false
     rm.row = null
   }
-  await syncStaffServices(rm.row.id, [])
+
+  // opcional: se algum lugar depende da lista de services atualizada
+  // await servicesStore.fetchServices()
 }
 
 async function toggleActive (p) {
@@ -293,6 +257,8 @@ async function toggleActive (p) {
 /* ------- lifecycle ------- */
 onMounted(async () => {
   staffStore.loadFromSession()
+  servicesStore.loadFromSession?.()
+
   await Promise.all([
     staffStore.fetchStaff(),
     servicesStore.fetchServices()

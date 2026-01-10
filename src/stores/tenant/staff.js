@@ -22,6 +22,31 @@ function createDefaultSchedule () {
   }
 }
 
+function parseIds (raw) {
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw.map(Number).filter(n => Number.isFinite(n))
+
+  if (typeof raw === 'string') {
+    try {
+      const j = JSON.parse(raw)
+      if (Array.isArray(j)) return j.map(Number).filter(n => Number.isFinite(n))
+    } catch {
+      // ignore
+    }
+
+    return raw
+      .split(',')
+      .map(s => Number(String(s).trim()))
+      .filter(n => Number.isFinite(n))
+  }
+
+  return []
+}
+
+function uniqIds (arr) {
+  return [...new Set(parseIds(arr))]
+}
+
 export const useStaffStore = defineStore('staff', {
   state: () => ({
     loadingList: false,
@@ -29,7 +54,7 @@ export const useStaffStore = defineStore('staff', {
     saving: false,
     deleting: false,
 
-    staff: [], // lista de colaboradores
+    staff: [],
     meta: {
       total: 0,
       page: 1,
@@ -78,10 +103,12 @@ export const useStaffStore = defineStore('staff', {
         id: staffData.id ?? null,
         name: staffData.name ?? '',
         role: staffData.role ?? '',
-        photoUrl: staffData.photoUrl ?? '',
+        photoUrl: staffData.photoUrl ?? staffData.photo_url ?? '',
         status: staffData.status || 'active',
         schedule: staffData.schedule || createDefaultSchedule(),
-        serviceIds: Array.isArray(staffData.serviceIds) ? staffData.serviceIds : []
+
+        // agora vem do backend (pivot) como array
+        serviceIds: uniqIds(staffData.serviceIds ?? staffData.service_ids)
       }
       this.saveToSession()
     },
@@ -155,23 +182,18 @@ export const useStaffStore = defineStore('staff', {
 
       try {
         const data = JSON.parse(raw)
+
         if (data.meta) {
-          this.meta = {
-            ...this.meta,
-            ...data.meta
-          }
+          this.meta = { ...this.meta, ...data.meta }
         }
+
         if (data.filters) {
-          this.filters = {
-            ...this.filters,
-            ...data.filters
-          }
+          this.filters = { ...this.filters, ...data.filters }
         }
+
         if (data.currentStaff) {
-          this.currentStaff = {
-            ...this.currentStaff,
-            ...data.currentStaff
-          }
+          this.currentStaff = { ...this.currentStaff, ...data.currentStaff }
+          this.currentStaff.serviceIds = uniqIds(this.currentStaff.serviceIds)
         }
       } catch (e) {
         console.error('Erro ao carregar staff_state da sessão', e)
@@ -182,12 +204,33 @@ export const useStaffStore = defineStore('staff', {
       sessionStorage.removeItem(KEY)
     },
 
+    // ---------------------------------------------------
+    // Payload normalizer (nova lógica)
+    // ---------------------------------------------------
+    normalizeStaffPayload (payload = {}) {
+      const out = { ...payload }
+
+      // garante consistência photoUrl -> photo_url (back usa photo_url)
+      if (out.photoUrl !== undefined && out.photo_url === undefined) {
+        out.photo_url = out.photoUrl
+      }
+      delete out.photoUrl
+
+      // garante que só vai "serviceIds" (array), não manda service_ids
+      if ('service_ids' in out && out.serviceIds === undefined) {
+        out.serviceIds = out.service_ids
+      }
+      if ('service_ids' in out) delete out.service_ids
+
+      if ('serviceIds' in out) {
+        out.serviceIds = uniqIds(out.serviceIds)
+      }
+
+      return out
+    },
+
     // CRUD ---------------------------------------------
 
-    /**
-     * Lista colaboradores
-     * Sempre inclui user_id e group_id (tenant) automaticamente
-     */
     async fetchStaff (params = {}) {
       this.loadingList = true
 
@@ -195,15 +238,11 @@ export const useStaffStore = defineStore('staff', {
         const userId = this.getCurrentUserId()
         const groupId = this.getCurrentGroupId()
 
-        if (!groupId) {
-          console.warn('Nenhum grupo selecionado ao listar colaboradores.')
-        }
-
         const query = {
           page: params.page || this.meta.page,
           limit: params.limit || this.meta.limit,
           user_id: userId,
-          group_id: groupId // <-- tenant
+          group_id: groupId
         }
 
         const status = params.status ?? this.filters.status
@@ -214,19 +253,21 @@ export const useStaffStore = defineStore('staff', {
 
         const { data } = await api.get('/tenant/staff', { params: query })
 
-        this.staff = data.data || []
+        // normaliza serviceIds vindo do backend
+        this.staff = (data.data || []).map(s => ({
+          ...s,
+          photoUrl: s.photoUrl ?? s.photo_url ?? '',
+          serviceIds: uniqIds(s.serviceIds ?? s.service_ids)
+        }))
+
         if (data.meta) {
-          this.meta = {
-            ...this.meta,
-            ...data.meta
-          }
+          this.meta = { ...this.meta, ...data.meta }
         } else {
           this.meta.total = this.staff.length
           this.meta.totalPages = 1
         }
 
         this.saveToSession()
-
         return { ok: true, data }
       } catch (err) {
         console.error('Erro ao buscar colaboradores:', err)
@@ -240,14 +281,8 @@ export const useStaffStore = defineStore('staff', {
       }
     },
 
-    /**
-     * Busca um colaborador por ID
-     * Sempre inclui user_id e group_id (tenant)
-     */
     async fetchStaffById (id) {
-      if (!id) {
-        return { ok: false, error: 'ID inválido para buscar colaborador.' }
-      }
+      if (!id) return { ok: false, error: 'ID inválido para buscar colaborador.' }
 
       this.loadingItem = true
       try {
@@ -258,18 +293,18 @@ export const useStaffStore = defineStore('staff', {
           params: { user_id: userId, group_id: groupId }
         })
 
-        this.currentStaff = {
-          ...this.currentStaff,
-          ...data
+        const normalized = {
+          ...data,
+          photoUrl: data.photoUrl ?? data.photo_url ?? '',
+          serviceIds: uniqIds(data.serviceIds ?? data.service_ids)
         }
 
-        const index = this.staff.findIndex(s => s.id === data.id)
-        if (index !== -1) {
-          this.staff.splice(index, 1, data)
-        }
+        this.currentStaff = { ...this.currentStaff, ...normalized }
+
+        const index = this.staff.findIndex(s => s.id === normalized.id)
+        if (index !== -1) this.staff.splice(index, 1, normalized)
 
         this.saveToSession()
-
         return { ok: true, data }
       } catch (err) {
         console.error('Erro ao buscar colaborador por ID:', err)
@@ -283,14 +318,10 @@ export const useStaffStore = defineStore('staff', {
       }
     },
 
-    /**
-     * Cria ou atualiza o currentStaff no backend
-     * Sempre inclui user_id e group_id (tenant)
-     */
     async saveCurrentStaff () {
       const isEdit = !!this.currentStaff.id
-
       this.saving = true
+
       try {
         const userId = this.getCurrentUserId()
         const groupId = this.getCurrentGroupId()
@@ -301,61 +332,52 @@ export const useStaffStore = defineStore('staff', {
           return { ok: false, error: msg }
         }
 
-        const payload = {
-          ...this.currentStaff,
-          user_id: userId,
-          group_id: groupId
-        }
+        // IMPORTANT: manda serviceIds como array (pivot)
+        const payload = this.normalizeStaffPayload({
+          ...this.currentStaff
+        })
 
         let resp
         if (isEdit) {
-          resp = await api.put(
-            `/tenant/staff/${this.currentStaff.id}`,
-            payload,
-            {
-              params: { user_id: userId, group_id: groupId }
-            }
-          )
+          resp = await api.put(`/tenant/staff/${this.currentStaff.id}`, payload, {
+            params: { user_id: userId, group_id: groupId }
+          })
         } else {
-          resp = await api.post(
-            '/tenant/staff',
-            payload,
-            {
-              params: { user_id: userId, group_id: groupId }
-            }
-          )
+          resp = await api.post('/tenant/staff', payload, {
+            params: { user_id: userId, group_id: groupId }
+          })
         }
 
         const data = resp.data
 
-        this.currentStaff = {
-          ...this.currentStaff,
-          ...data
+        const normalized = {
+          ...data,
+          photoUrl: data.photoUrl ?? data.photo_url ?? this.currentStaff.photoUrl ?? '',
+          serviceIds: uniqIds(data.serviceIds ?? data.service_ids ?? payload.serviceIds)
         }
 
-        const index = this.staff.findIndex(s => s.id === data.id)
+        this.currentStaff = { ...this.currentStaff, ...normalized }
+
+        const index = this.staff.findIndex(s => s.id === normalized.id)
         if (index !== -1) {
-          this.staff.splice(index, 1, data)
+          this.staff.splice(index, 1, normalized)
         } else {
-          this.staff.unshift(data)
+          this.staff.unshift(normalized)
         }
 
         this.saveToSession()
+
         Notify.create({
           type: 'positive',
-          message: isEdit
-            ? 'Colaborador atualizado com sucesso.'
-            : 'Colaborador criado com sucesso.'
+          message: isEdit ? 'Colaborador atualizado com sucesso.' : 'Colaborador criado com sucesso.'
         })
 
-        return { ok: true, data }
+        return { ok: true, data: normalized }
       } catch (err) {
         console.error('Erro ao salvar colaborador:', err)
         const msg =
           err?.response?.data?.message ||
-          (this.currentStaff.id
-            ? 'Erro ao atualizar colaborador.'
-            : 'Erro ao criar colaborador.')
+          (this.currentStaff.id ? 'Erro ao atualizar colaborador.' : 'Erro ao criar colaborador.')
         Notify.create({ type: 'negative', message: msg })
         return { ok: false, error: msg }
       } finally {
@@ -363,14 +385,8 @@ export const useStaffStore = defineStore('staff', {
       }
     },
 
-    /**
-     * Remove um colaborador
-     * Sempre inclui user_id e group_id (tenant)
-     */
     async deleteStaff (id) {
-      if (!id) {
-        return { ok: false, error: 'ID inválido para excluir colaborador.' }
-      }
+      if (!id) return { ok: false, error: 'ID inválido para excluir colaborador.' }
 
       this.deleting = true
       try {
@@ -388,17 +404,12 @@ export const useStaffStore = defineStore('staff', {
         }
 
         this.saveToSession()
-        Notify.create({
-          type: 'positive',
-          message: 'Colaborador removido com sucesso.'
-        })
+        Notify.create({ type: 'positive', message: 'Colaborador removido com sucesso.' })
 
         return { ok: true, data }
       } catch (err) {
         console.error('Erro ao excluir colaborador:', err)
-        const msg =
-          err?.response?.data?.message ||
-          'Erro ao excluir colaborador.'
+        const msg = err?.response?.data?.message || 'Erro ao excluir colaborador.'
         Notify.create({ type: 'negative', message: msg })
         return { ok: false, error: msg }
       } finally {

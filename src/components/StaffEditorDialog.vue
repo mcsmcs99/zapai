@@ -79,7 +79,7 @@
             >
               Nenhum serviço cadastrado.
               <div class="q-mt-xs text-caption">
-                Cadastre um serviço no menu <b>Serviços > Novo serviço</b>.
+                Cadastre um serviço no menu <b>Serviços &gt; Novo serviço</b>.
               </div>
             </q-banner>
 
@@ -96,7 +96,8 @@
                 tag="label"
               >
                 <q-item-section side>
-                  <q-checkbox v-model="local.serviceIds" :val="s.id" />
+                  <!-- importante: val numérico -->
+                  <q-checkbox v-model="local.serviceIds" :val="Number(s.id)" />
                 </q-item-section>
 
                 <q-item-section>
@@ -106,8 +107,12 @@
 
                   <q-item-label caption>
                     <span v-if="s.duration">Duração: {{ s.duration }}min</span>
-                    <span v-if="s.price != null" class="q-ml-sm">• R$ {{ Number(s.price).toFixed(2) }}</span>
-                    <span v-if="s.status" class="q-ml-sm">• {{ s.status === 'active' ? 'Ativo' : 'Inativo' }}</span>
+                    <span v-if="s.price != null" class="q-ml-sm">
+                      • R$ {{ Number(s.price).toFixed(2) }}
+                    </span>
+                    <span v-if="s.status" class="q-ml-sm">
+                      • {{ s.status === 'active' ? 'Ativo' : 'Inativo' }}
+                    </span>
                   </q-item-label>
                 </q-item-section>
               </q-item>
@@ -216,8 +221,7 @@
                   almoço ou turnos diferentes.
                 </li>
                 <li>
-                  Use o toggle para marcar o dia como
-                  <b>Fechado</b>.
+                  Use o toggle para marcar o dia como <b>Fechado</b>.
                 </li>
               </ul>
             </q-banner>
@@ -230,9 +234,7 @@
           <q-btn
             color="deep-purple-6"
             icon="save"
-            :label="
-              mode === 'create' ? 'Criar Colaborador' : 'Atualizar Colaborador'
-            "
+            :label="mode === 'create' ? 'Criar Colaborador' : 'Atualizar Colaborador'"
             type="submit"
           />
         </div>
@@ -242,28 +244,22 @@
 </template>
 
 <script setup>
-import {
-  reactive,
-  watch,
-  ref,
-  nextTick,
-  defineExpose,
-  computed
-} from 'vue'
+import { reactive, watch, ref, nextTick, defineExpose, computed } from 'vue'
 import { useQuasar } from 'quasar'
 
 defineOptions({ name: 'StaffEditorDialog' })
 
 const $q = useQuasar()
 
-// ---- helpers -------------------------------------------------
-
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+
+function uniqIds (raw) {
+  const arr = Array.isArray(raw) ? raw : []
+  return [...new Set(arr.map(Number).filter(Number.isFinite))]
+}
 
 /**
  * Converte qualquer formato de schedule (string antiga ou objeto novo)
- * para o formato:
- *   { mon: { closed, intervals: [{ start, end }] }, ... }
  */
 function normalizeSchedule (rawSchedule = {}) {
   const result = {}
@@ -271,7 +267,6 @@ function normalizeSchedule (rawSchedule = {}) {
   for (const key of DAY_KEYS) {
     const v = rawSchedule[key]
 
-    // já está no novo formato?
     if (v && typeof v === 'object' && 'closed' in v && Array.isArray(v.intervals)) {
       result[key] = {
         closed: !!v.closed,
@@ -283,7 +278,6 @@ function normalizeSchedule (rawSchedule = {}) {
       continue
     }
 
-    // formato antigo: string ("08:30-17:30", "Fechado", etc.)
     if (typeof v === 'string') {
       const trimmed = v.trim()
 
@@ -309,11 +303,32 @@ function normalizeSchedule (rawSchedule = {}) {
       continue
     }
 
-    // sem valor → considera fechado
     result[key] = { closed: true, intervals: [] }
   }
 
   return result
+}
+
+function normalizeStaff (v = {}) {
+  const cloned = JSON.parse(JSON.stringify(v || {}))
+
+  // compat service_ids -> serviceIds
+  if (cloned.serviceIds === undefined && cloned.service_ids !== undefined) {
+    cloned.serviceIds = cloned.service_ids
+  }
+  delete cloned.service_ids
+
+  // compat photo_url -> photoUrl
+  if (cloned.photoUrl === undefined && cloned.photo_url !== undefined) {
+    cloned.photoUrl = cloned.photo_url
+  }
+  delete cloned.photo_url
+
+  if (!cloned.status) cloned.status = 'active'
+  cloned.serviceIds = uniqIds(cloned.serviceIds)
+  cloned.schedule = normalizeSchedule(cloned.schedule)
+
+  return cloned
 }
 
 // ---- props / state -------------------------------------------
@@ -341,32 +356,20 @@ const props = defineProps({
       }
     })
   },
-
   services: {
     type: Array,
-    default: () => [] // [{ id, title, duration, price, status }]
+    default: () => []
   }
 })
 
 const emit = defineEmits(['update:modelValue', 'save'])
 
-// monta o local já com schedule normalizado
-const local = reactive({
-  ...JSON.parse(JSON.stringify(props.value)),
-  status: props.value.status || 'active',
-  serviceIds: Array.isArray(props.value.serviceIds) ? [...props.value.serviceIds] : [], // ✅
-  schedule: normalizeSchedule(props.value.schedule)
-})
+const local = reactive(normalizeStaff(props.value))
 
 watch(
   () => props.value,
-  v => {
-    const cloned = JSON.parse(JSON.stringify(v))
-    cloned.schedule = normalizeSchedule(cloned.schedule)
-    if (!cloned.status) cloned.status = 'active'
-    if (!Array.isArray(cloned.serviceIds)) cloned.serviceIds = [] // ✅
-    Object.assign(local, cloned)
-  }
+  (v) => Object.assign(local, normalizeStaff(v)),
+  { deep: true }
 )
 
 const days = [
@@ -379,13 +382,9 @@ const days = [
   { key: 'sun', label: 'Domingo' }
 ]
 
-/**
- * Gera opções de horário de 15 em 15 minutos
- */
 const timeOptions = computed(() => {
   const out = []
   const STEP = 15
-
   for (let h = 0; h < 24; h++) {
     for (let m = 0; m < 60; m += STEP) {
       const hh = String(h).padStart(2, '0')
@@ -393,13 +392,11 @@ const timeOptions = computed(() => {
       out.push(`${hh}:${mm}`)
     }
   }
-
   return out
 })
 
 const workRef = ref(null)
 
-/** Exposto para o pai: foca/rola até a seção de horários */
 async function focusWork () {
   await nextTick()
   workRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -412,9 +409,7 @@ function addInterval (dayKey) {
 
 function removeInterval (dayKey, idx) {
   const arr = local.schedule[dayKey].intervals
-  if (arr.length > 1) {
-    arr.splice(idx, 1)
-  }
+  if (arr.length > 1) arr.splice(idx, 1)
 }
 
 function validateSchedule () {
@@ -429,7 +424,6 @@ function validateSchedule () {
     for (let i = 0; i < intervals.length; i++) {
       const { start, end } = intervals[i]
 
-      // início/fim obrigatórios e início < fim
       if (!start || !end || start >= end) {
         $q.notify({
           type: 'negative',
@@ -438,7 +432,6 @@ function validateSchedule () {
         return false
       }
 
-      // não pode sobrepor com o anterior
       if (i > 0) {
         const prev = intervals[i - 1]
         if (start < prev.end) {
@@ -451,15 +444,15 @@ function validateSchedule () {
       }
     }
   }
-
   return true
 }
 
 function onSubmit () {
   if (!validateSchedule()) return
 
-  console.log(JSON.parse(JSON.stringify(local)))
-  emit('save', JSON.parse(JSON.stringify(local)))
+  const payload = normalizeStaff(local)
+
+  emit('save', payload)
   emit('update:modelValue', false)
 }
 </script>

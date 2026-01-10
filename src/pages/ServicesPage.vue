@@ -51,11 +51,7 @@
                       <q-item clickable @click="toggleActive(s)">
                         <q-item-section avatar>
                           <q-icon
-                            :name="
-                              s.status === 'active'
-                                ? 'pause'
-                                : 'play_arrow'
-                            "
+                            :name="s.status === 'active' ? 'pause' : 'play_arrow'"
                           />
                         </q-item-section>
                         <q-item-section>
@@ -108,9 +104,11 @@
             <div class="text-caption text-grey-7 q-mb-xs">
               Colaboradores:
             </div>
-            <div v-if="(s.collaborator_ids || []).length">
+
+            <!-- agora usa collaboratorIds (pivot) -->
+            <div v-if="(getCollaboratorIds(s) || []).length">
               <q-badge
-                v-for="c in mapCollaborators(s.collaborator_ids)"
+                v-for="c in mapCollaborators(getCollaboratorIds(s))"
                 :key="c.id"
                 class="q-mr-xs q-mb-xs"
                 color="indigo-1"
@@ -181,13 +179,20 @@ const currency = v =>
     currency: 'BRL'
   }).format(Number(v || 0))
 
-const mapCollaborators = ids =>
+/**
+ * compat: caso algum endpoint ainda devolva collaborator_ids,
+ * este helper pega a melhor chave.
+ */
+const getCollaboratorIds = (service) =>
+  service?.collaboratorIds ?? service?.collaborator_ids ?? []
+
+const mapCollaborators = (ids) =>
   collaborators.value.filter(c => (ids || []).includes(c.id))
 
 /* Modal de criar/editar */
 const dlg = reactive({
   open: false,
-  mode: 'create' // 'create' | 'edit'
+  mode: 'create'
 })
 
 function openCreate () {
@@ -226,8 +231,6 @@ async function remove () {
   if (resp.ok) {
     rm.open = false
     rm.row = null
-    // se quiser garantir sync:
-    // await servicesStore.fetchServices()
   }
 }
 

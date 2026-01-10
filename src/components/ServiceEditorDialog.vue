@@ -23,7 +23,9 @@
           <div class="row items-center q-gutter-sm q-mb-md">
             <div class="row items-center q-gutter-sm">
               <q-icon name="content_cut" />
-              <div class="text-subtitle1 text-weight-bold">Novo Serviço</div>
+              <div class="text-subtitle1 text-weight-bold">
+                {{ mode === 'create' ? 'Novo Serviço' : 'Editar Serviço' }}
+              </div>
             </div>
 
             <q-space />
@@ -95,7 +97,7 @@
             >
               Nenhum colaborador cadastrado.
               <div class="q-mt-xs text-caption">
-                Cadastre um colaborador no menu <b>Colaboradores > Novo colaborador</b>.
+                Cadastre um colaborador no menu <b>Colaboradores &gt; Novo colaborador</b>.
               </div>
             </q-banner>
 
@@ -112,7 +114,8 @@
                 tag="label"
               >
                 <q-item-section side>
-                  <q-checkbox v-model="local.collaboratorIds" :val="c.id" />
+                  <!-- importante: val numérico -->
+                  <q-checkbox v-model="local.collaboratorIds" :val="Number(c.id)" />
                 </q-item-section>
 
                 <q-item-section>
@@ -146,9 +149,29 @@
 import { reactive, watch } from 'vue'
 defineOptions({ name: 'ServiceEditorDialog' })
 
+function normalizeIds (raw) {
+  if (!raw) return []
+  if (Array.isArray(raw)) return [...new Set(raw.map(Number).filter(Number.isFinite))]
+  return []
+}
+
+function normalizeService (v = {}) {
+  const out = JSON.parse(JSON.stringify(v || {}))
+
+  // compat: caso ainda venha collaborator_ids de algum lugar
+  if (out.collaboratorIds === undefined && out.collaborator_ids !== undefined) {
+    out.collaboratorIds = out.collaborator_ids
+  }
+  delete out.collaborator_ids
+
+  out.collaboratorIds = normalizeIds(out.collaboratorIds)
+
+  return out
+}
+
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
-  mode: { type: String, default: 'create' }, // 'create' | 'edit'
+  mode: { type: String, default: 'create' },
   value: {
     type: Object,
     default: () => ({
@@ -163,20 +186,25 @@ const props = defineProps({
   },
   collaborators: {
     type: Array,
-    default: () => [] // [{id, name, role}]
+    default: () => []
   }
 })
 const emit = defineEmits(['update:modelValue', 'save'])
 
-const local = reactive(JSON.parse(JSON.stringify(props.value)))
+const local = reactive(normalizeService(props.value))
 
 watch(
   () => props.value,
-  v => Object.assign(local, JSON.parse(JSON.stringify(v)))
+  (v) => {
+    Object.assign(local, normalizeService(v))
+  },
+  { deep: true }
 )
 
 function onSubmit () {
-  emit('save', JSON.parse(JSON.stringify(local)))
+  // garante IDs numéricos e únicos
+  const payload = normalizeService(local)
+  emit('save', payload)
   emit('update:modelValue', false)
 }
 </script>

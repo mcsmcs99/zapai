@@ -6,6 +6,9 @@ import { useAuthStore } from 'src/stores/auth'
 
 const KEY = 'appointments_state'
 
+// ✅ fallback do groupId (pra não depender só do auth timing)
+const GROUP_FALLBACK_KEY = 'tenant:last_group_id'
+
 export const useAppointmentsStore = defineStore('appointments', {
   state: () => ({
     loadingList: false,
@@ -13,63 +16,125 @@ export const useAppointmentsStore = defineStore('appointments', {
     saving: false,
     deleting: false,
 
-    appointments: [], // lista de agendamentos
+    appointments: [],
     meta: {
       total: 0,
       page: 1,
-      limit: 20,
+      limit: 30,
       totalPages: 1
     },
 
     filters: {
       status: '',
       search: '',
-      from: '', // YYYY-MM-DD (opcional)
-      to: ''    // YYYY-MM-DD (opcional)
+      from: '',
+      to: ''
     },
 
     currentAppointment: {
       id: null,
-      date: '', // YYYY-MM-DD
-      start: '', // HH:mm
-      end: '', // HH:mm
+      date: '',
+      start: '',
+      end: '',
 
-      status: 'confirmed', // confirmed | done | cancelled (ajuste se tiver outros)
+      status: 'confirmed',
       price: 0,
 
       serviceId: null,
       collaboratorId: null,
 
-      // se seu back usar customer_id, troque/adapte
       customerName: ''
     }
   }),
 
   actions: {
-    // helpers internos ---------------------------------
+    /* ---------------- context helpers ---------------- */
+
     getCurrentUserId () {
       const auth = useAuthStore()
       return auth?.user?.id || null
     },
 
-    getCurrentGroupId () {
-      const auth = useAuthStore()
-      return auth?.user?.current_group_id || null
+    // ✅ sempre que tiver groupId, salva como fallback
+    rememberGroupId (groupId) {
+      const gid = Number(groupId)
+      if (!Number.isFinite(gid) || gid <= 0) return
+      try {
+        localStorage.setItem(GROUP_FALLBACK_KEY, String(gid))
+      } catch (e) {console.warn(e)}
     },
 
-    // normalização -------------------------------------
+    // ✅ resolve groupId por múltiplas fontes (auth -> localStorage -> session)
+    getCurrentGroupId () {
+      const auth = useAuthStore()
+
+      const fromAuth = auth?.user?.current_group_id
+      const gidAuth = Number(fromAuth)
+      if (Number.isFinite(gidAuth) && gidAuth > 0) {
+        this.rememberGroupId(gidAuth)
+        return gidAuth
+      }
+
+      // fallback: localStorage
+      try {
+        const raw = localStorage.getItem(GROUP_FALLBACK_KEY)
+        const gid = Number(raw)
+        if (Number.isFinite(gid) && gid > 0) return gid
+      } catch (e) {console.warn(e)}
+
+      // fallback: session (caso você tenha salvo antes no appointments_state)
+      try {
+        const raw = sessionStorage.getItem(KEY)
+        if (raw) {
+          const data = JSON.parse(raw)
+          const maybe =
+            data?.currentAppointment?.group_id ??
+            data?.currentAppointment?.groupId ??
+            null
+          const gid = Number(maybe)
+          if (Number.isFinite(gid) && gid > 0) return gid
+        }
+      } catch (e) {console.warn(e)}
+
+      return null
+    },
+
+    /**
+     * ✅ helper único pra padronizar contexto
+     * - tenta pegar user_id/group_id do auth/fallback
+     * - permite override via params (caso page/store passe)
+     */
+    resolveContextIds (params = {}) {
+      const userId = Number(params.user_id ?? params.userId ?? this.getCurrentUserId() ?? 0) || null
+
+      // group pode vir por params (ex.: page mandou), senão pega do helper robusto
+      const groupFromParams = Number(params.group_id ?? params.groupId ?? 0)
+      const groupId = (Number.isFinite(groupFromParams) && groupFromParams > 0)
+        ? groupFromParams
+        : this.getCurrentGroupId()
+
+      if (Number.isFinite(groupId) && groupId > 0) this.rememberGroupId(groupId)
+
+      return { userId, groupId }
+    },
+
+    /* ---------------- normalização ---------------- */
+
     normalizeAppointment (row = {}) {
-      // ids (aceita camelCase, snake_case e objetos)
       const serviceId =
         row.serviceId ?? row.service_id ?? row.service?.id ?? null
 
       const collaboratorId =
-        row.collaboratorId ?? row.collaborator_id ?? row.collaborator?.id ?? row.staff?.id ?? null
+        row.collaboratorId ??
+        row.collaborator_id ??
+        row.collaborator?.id ??
+        row.staff?.id ??
+        null
 
-      const customerName = row.customer_name ?? ''
+      const customerName =
+        row.customerName ?? row.customer_name ?? ''
 
       return {
-        // base
         id: row.id ?? null,
         date: row.date ?? '',
 
@@ -79,45 +144,93 @@ export const useAppointmentsStore = defineStore('appointments', {
         status: row.status ?? 'pending',
         price: Number(row.price ?? 0),
 
-        // ======= para salvar/editar =======
         serviceId,
         collaboratorId,
         customerName,
 
-        // ======= compat (evita quebrar código existente) =======
+        // compat
         service_id: serviceId,
         collaborator_id: collaboratorId,
         customer_name: customerName
       }
     },
 
-    // state helpers ------------------------------------
+    /* ---------------- state helpers ---------------- */
+
     setCurrentAppointmentField (key, val) {
-      if (key in this.currentAppointment) {
-        this.currentAppointment[key] = val
-        this.saveToSession()
-      }
-    },
+      if (!(key in this.currentAppointment)) return
 
-    setCurrentAppointment (data = {}) {
-      this.currentAppointment = this.normalizeAppointment(data)
+      // ✅ se trocar service, limpa collaborator
+      if (key === 'serviceId') {
+        const nextServiceId = val != null ? Number(val) : null
+        const currentServiceId =
+          this.currentAppointment.serviceId != null
+            ? Number(this.currentAppointment.serviceId)
+            : null
+
+        if (nextServiceId !== currentServiceId) {
+          this.currentAppointment.serviceId = nextServiceId
+          this.currentAppointment.collaboratorId = null
+
+          // compat
+          this.currentAppointment.service_id = this.currentAppointment.serviceId
+          this.currentAppointment.collaborator_id = this.currentAppointment.collaboratorId
+
+          this.saveToSession()
+          return
+        }
+      }
+
+      this.currentAppointment[key] = val
+
+      // compat
+      if (key === 'serviceId') this.currentAppointment.service_id = val
+      if (key === 'collaboratorId') this.currentAppointment.collaborator_id = val
+      if (key === 'customerName') this.currentAppointment.customer_name = val
+
       this.saveToSession()
     },
 
-    setFilter (key, val) {
-      if (key in this.filters) {
-        this.filters[key] = val
-        this.saveToSession()
+    setCurrentAppointment (data = {}, opts = {}) {
+      const normalized = this.normalizeAppointment(data)
+
+      const currentServiceId =
+        this.currentAppointment.serviceId != null
+          ? Number(this.currentAppointment.serviceId)
+          : null
+
+      const nextServiceId =
+        normalized.serviceId != null ? Number(normalized.serviceId) : null
+
+      const serviceChanged =
+        currentServiceId != null &&
+        nextServiceId != null &&
+        currentServiceId !== nextServiceId
+
+      const collaboratorWasProvided =
+        Object.prototype.hasOwnProperty.call(data, 'collaboratorId') ||
+        Object.prototype.hasOwnProperty.call(data, 'collaborator_id') ||
+        Object.prototype.hasOwnProperty.call(data, 'collaborator') ||
+        Object.prototype.hasOwnProperty.call(data, 'staff')
+
+      const mustResetCollaborator =
+        (opts.fromSession === true) ||
+        (serviceChanged && !collaboratorWasProvided)
+
+      this.currentAppointment = {
+        ...this.currentAppointment,
+        ...normalized,
+        collaboratorId: mustResetCollaborator ? null : normalized.collaboratorId
       }
-    },
 
-    setPage (page) {
-      this.meta.page = Number(page) || 1
-      this.saveToSession()
-    },
+      // compat
+      this.currentAppointment.service_id = this.currentAppointment.serviceId
+      this.currentAppointment.collaborator_id = this.currentAppointment.collaboratorId
+      this.currentAppointment.customer_name = this.currentAppointment.customerName
 
-    setLimit (limit) {
-      this.meta.limit = Number(limit) || 20
+      // ✅ se vier group_id no data (ex.: algum fluxo), guarda no session tb
+      if (data?.group_id) this.currentAppointment.group_id = Number(data.group_id)
+
       this.saveToSession()
     },
 
@@ -136,32 +249,8 @@ export const useAppointmentsStore = defineStore('appointments', {
       this.saveToSession()
     },
 
-    reset () {
-      this.loadingList = false
-      this.loadingItem = false
-      this.saving = false
-      this.deleting = false
+    /* ---------------- session ---------------- */
 
-      this.appointments = []
-      this.meta = {
-        total: 0,
-        page: 1,
-        limit: 20,
-        totalPages: 1
-      }
-
-      this.filters = {
-        status: '',
-        search: '',
-        from: '',
-        to: ''
-      }
-
-      this.resetCurrentAppointment()
-      this.clearSession()
-    },
-
-    // sessionStorage -----------------------------------
     saveToSession () {
       const payload = {
         meta: this.meta,
@@ -178,16 +267,11 @@ export const useAppointmentsStore = defineStore('appointments', {
       try {
         const data = JSON.parse(raw)
 
-        if (data.meta) {
-          this.meta = { ...this.meta, ...data.meta }
-        }
-
-        if (data.filters) {
-          this.filters = { ...this.filters, ...data.filters }
-        }
+        if (data.meta) this.meta = { ...this.meta, ...data.meta }
+        if (data.filters) this.filters = { ...this.filters, ...data.filters }
 
         if (data.currentAppointment) {
-          this.currentAppointment = { ...this.currentAppointment, ...data.currentAppointment }
+          this.setCurrentAppointment(data.currentAppointment, { fromSession: true })
         }
       } catch (e) {
         console.error('Erro ao carregar appointments_state da sessão', e)
@@ -198,22 +282,14 @@ export const useAppointmentsStore = defineStore('appointments', {
       sessionStorage.removeItem(KEY)
     },
 
-    // CRUD ---------------------------------------------
+    /* ---------------- CRUD ---------------- */
 
-    /**
-     * Lista agendamentos
-     * Sempre inclui user_id e group_id (tenant) automaticamente
-     */
     async fetchAppointments (params = {}) {
       this.loadingList = true
-
       try {
-        const userId = this.getCurrentUserId()
-        const groupId = this.getCurrentGroupId()
+        const { userId, groupId } = this.resolveContextIds(params)
 
-        if (!groupId) {
-          console.warn('Nenhum grupo selecionado ao listar agendamentos.')
-        }
+        if (!groupId) console.warn('Nenhum grupo selecionado ao listar agendamentos.')
 
         const query = {
           page: params.page || this.meta.page,
@@ -260,30 +336,22 @@ export const useAppointmentsStore = defineStore('appointments', {
       }
     },
 
-    /**
-     * Busca um agendamento por ID
-     */
-    async fetchAppointmentById (id) {
-      if (!id) {
-        return { ok: false, error: 'ID inválido para buscar agendamento.' }
-      }
+    async fetchAppointmentById (id, params = {}) {
+      if (!id) return { ok: false, error: 'ID inválido para buscar agendamento.' }
 
       this.loadingItem = true
       try {
-        const userId = this.getCurrentUserId()
-        const groupId = this.getCurrentGroupId()
+        const { userId, groupId } = this.resolveContextIds(params)
 
         const { data } = await api.get(`/tenant/appointments/${id}`, {
           params: { user_id: userId, group_id: groupId }
         })
 
         const normalized = this.normalizeAppointment(data)
-        this.currentAppointment = normalized
+        this.setCurrentAppointment(normalized)
 
         const index = this.appointments.findIndex(a => a.id === normalized.id)
-        if (index !== -1) {
-          this.appointments.splice(index, 1, normalized)
-        }
+        if (index !== -1) this.appointments.splice(index, 1, normalized)
 
         this.saveToSession()
         return { ok: true, data: normalized }
@@ -299,24 +367,45 @@ export const useAppointmentsStore = defineStore('appointments', {
       }
     },
 
-    /**
-     * Cria ou atualiza o currentAppointment no backend
-     */
-    async saveCurrentAppointment () {
+    async saveCurrentAppointment (params = {}) {
       const isEdit = !!this.currentAppointment.id
-
       this.saving = true
-      try {
-        const userId = this.getCurrentUserId()
-        const groupId = this.getCurrentGroupId()
 
+      try {
+        const { userId, groupId } = this.resolveContextIds(params)
+
+        // ✅ se ainda não tiver groupId, tenta uma última vez usando fallback salvo
         if (!groupId) {
           const msg = 'Nenhum grupo selecionado para salvar agendamento.'
           Notify.create({ type: 'negative', message: msg })
           return { ok: false, error: msg }
         }
 
-        // payload no padrão que o backend costuma esperar (snake_case)
+        const serviceIdRaw =
+          this.currentAppointment.serviceId ??
+          this.currentAppointment.service_id ??
+          null
+
+        const collaboratorIdRaw =
+          this.currentAppointment.collaboratorId ??
+          this.currentAppointment.collaborator_id ??
+          null
+
+        const serviceId = Number(serviceIdRaw)
+        const collaboratorId = Number(collaboratorIdRaw)
+
+        if (!Number.isFinite(serviceId) || serviceId <= 0) {
+          const msg = 'service_id inválido ao salvar agendamento.'
+          Notify.create({ type: 'negative', message: msg })
+          return { ok: false, error: msg }
+        }
+
+        if (!Number.isFinite(collaboratorId) || collaboratorId <= 0) {
+          const msg = 'collaborator_id inválido ao salvar agendamento.'
+          Notify.create({ type: 'negative', message: msg })
+          return { ok: false, error: msg }
+        }
+
         const payload = {
           id: this.currentAppointment.id,
           date: this.currentAppointment.date,
@@ -325,10 +414,14 @@ export const useAppointmentsStore = defineStore('appointments', {
           status: this.currentAppointment.status,
           price: this.currentAppointment.price,
 
-          service_id: this.currentAppointment.serviceId,
-          collaborator_id: this.currentAppointment.collaboratorId,
+          service_id: serviceId,
+          collaborator_id: collaboratorId,
 
-          customer_name: this.currentAppointment.customerName,
+          customer_name: String(
+            this.currentAppointment.customerName ??
+            this.currentAppointment.customer_name ??
+            ''
+          ).trim(),
 
           user_id: userId,
           group_id: groupId
@@ -351,15 +444,11 @@ export const useAppointmentsStore = defineStore('appointments', {
 
         const data = resp.data
         const normalized = this.normalizeAppointment(data)
-
-        this.currentAppointment = normalized
+        this.setCurrentAppointment(normalized)
 
         const index = this.appointments.findIndex(a => a.id === normalized.id)
-        if (index !== -1) {
-          this.appointments.splice(index, 1, normalized)
-        } else {
-          this.appointments.unshift(normalized)
-        }
+        if (index !== -1) this.appointments.splice(index, 1, normalized)
+        else this.appointments.unshift(normalized)
 
         this.saveToSession()
 
@@ -372,12 +461,17 @@ export const useAppointmentsStore = defineStore('appointments', {
 
         return { ok: true, data: normalized }
       } catch (err) {
-        console.error('Erro ao salvar agendamento:', err)
+        console.error('Erro ao salvar agendamento:', err?.response?.data || err)
+
+        const rawMsg = err?.response?.data?.message
         const msg =
-          err?.response?.data?.message ||
-          (this.currentAppointment.id
-            ? 'Erro ao atualizar agendamento.'
-            : 'Erro ao criar agendamento.')
+          rawMsg === 'Este colaborador não está vinculado a este serviço.'
+            ? 'Este colaborador não pode realizar o serviço selecionado. Selecione outro colaborador.'
+            : (rawMsg ||
+              (this.currentAppointment.id
+                ? 'Erro ao atualizar agendamento.'
+                : 'Erro ao criar agendamento.'))
+
         Notify.create({ type: 'negative', message: msg })
         return { ok: false, error: msg }
       } finally {
@@ -385,78 +479,71 @@ export const useAppointmentsStore = defineStore('appointments', {
       }
     },
 
-    /**
-     * Helper mais semântico pra criar direto
-     * (útil pro dialog de "Novo agendamento")
-     */
-    async createAppointment (appointmentData = {}) {
+    async createAppointment (appointmentData = {}, params = {}) {
       this.setCurrentAppointment(appointmentData)
-      return this.saveCurrentAppointment()
+      return this.saveCurrentAppointment(params)
     },
 
-    /**
-     * Helper semântico pra atualizar direto (útil pra tela)
-     * Ex:
-     *   await appointmentsStore.updateAppointment(id, payload)
-     */
-    async updateAppointment (id, patch = {}) {
+    async updateAppointment (id, patch = {}, params = {}) {
       if (!id) {
         const msg = 'ID inválido para atualizar agendamento.'
         Notify.create({ type: 'negative', message: msg })
         return { ok: false, error: msg }
       }
 
-      // pega o registro atual na lista (ou do currentAppointment)
       let current =
         this.appointments.find(a => a.id === id) ||
         (this.currentAppointment?.id === id ? this.currentAppointment : null)
 
       if (!current) {
-        const r = await this.fetchAppointmentById(id)
+        const r = await this.fetchAppointmentById(id, params)
         if (!r?.ok) return r
 
-        // depois do fetch, tenta pegar de novo
         current =
           this.appointments.find(a => a.id === id) ||
           (this.currentAppointment?.id === id ? this.currentAppointment : null) ||
           {}
       }
 
-      // normaliza snake_case -> camelCase (e garante overwrite)
       const normalizedPatch = { ...patch }
 
       if (typeof patch.service_id !== 'undefined') normalizedPatch.serviceId = patch.service_id
       if (typeof patch.collaborator_id !== 'undefined') normalizedPatch.collaboratorId = patch.collaborator_id
-      if (typeof patch.customer_id !== 'undefined') normalizedPatch.customerId = patch.customer_id
+      if (typeof patch.customer_name !== 'undefined') normalizedPatch.customerName = patch.customer_name
 
-      // (opcional) remove as chaves snake pra não poluir o objeto
       delete normalizedPatch.service_id
       delete normalizedPatch.collaborator_id
-      delete normalizedPatch.customer_id
+      delete normalizedPatch.customer_name
 
-      // merge: base -> patch normalizado -> id
-      this.currentAppointment = {
+      const nextServiceId =
+        typeof normalizedPatch.serviceId !== 'undefined'
+          ? (normalizedPatch.serviceId != null ? Number(normalizedPatch.serviceId) : null)
+          : (current.serviceId != null ? Number(current.serviceId) : null)
+
+      const currServiceId =
+        current.serviceId != null ? Number(current.serviceId) : null
+
+      const serviceChanged =
+        typeof normalizedPatch.serviceId !== 'undefined' &&
+        nextServiceId !== currServiceId
+
+      this.setCurrentAppointment({
         ...current,
         ...normalizedPatch,
-        id
-      }
+        id,
+        ...(serviceChanged ? { collaboratorId: null, collaborator_id: null } : {})
+      })
 
       this.saveToSession()
-      return this.saveCurrentAppointment()
+      return this.saveCurrentAppointment(params)
     },
 
-    /**
-     * Remove um agendamento
-     */
-    async deleteAppointment (id) {
-      if (!id) {
-        return { ok: false, error: 'ID inválido para excluir agendamento.' }
-      }
+    async deleteAppointment (id, params = {}) {
+      if (!id) return { ok: false, error: 'ID inválido para excluir agendamento.' }
 
       this.deleting = true
       try {
-        const userId = this.getCurrentUserId()
-        const groupId = this.getCurrentGroupId()
+        const { userId, groupId } = this.resolveContextIds(params)
 
         const { data } = await api.delete(`/tenant/appointments/${id}`, {
           params: { user_id: userId, group_id: groupId }
@@ -464,15 +551,10 @@ export const useAppointmentsStore = defineStore('appointments', {
 
         this.appointments = this.appointments.filter(a => a.id !== id)
 
-        if (this.currentAppointment.id === id) {
-          this.resetCurrentAppointment()
-        }
+        if (this.currentAppointment.id === id) this.resetCurrentAppointment()
 
         this.saveToSession()
-        Notify.create({
-          type: 'positive',
-          message: 'Agendamento removido com sucesso.'
-        })
+        Notify.create({ type: 'positive', message: 'Agendamento removido com sucesso.' })
 
         return { ok: true, data }
       } catch (err) {
