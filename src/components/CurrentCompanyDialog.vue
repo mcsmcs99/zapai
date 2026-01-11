@@ -218,16 +218,11 @@ import { useCountriesStore } from 'src/stores/countries'
 import { useMask } from 'src/composables/useMask'
 import { getRegionFromCountryName } from 'src/utils/region-from-country'
 import { cnpjRule } from 'src/utils/validators/cnpj'
+import { countries as countriesList } from 'countries-list'
 
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false
-  },
-  company: {
-    type: Object,
-    required: true
-  }
+  modelValue: { type: Boolean, default: false },
+  company: { type: Object, required: true }
 })
 
 const emit = defineEmits(['update:modelValue', 'save'])
@@ -237,7 +232,6 @@ const loading = ref(false)
 const formRef = ref(null)
 const req = v => !!v || 'Obrigatório'
 
-// --- estado local da empresa (edição do formulário) ---
 const localCompany = reactive({
   id: null,
   country_id: null,
@@ -252,35 +246,25 @@ const localCompany = reactive({
   phone_fix: ''
 })
 
-// --- estado usado apenas para exibição no HEADER (último salvo) ---
 const headerCompany = reactive({
   company_name: '',
   company_fantasy_name: '',
   document_number: ''
 })
 
-// título do header (fantasia > razão social > fallback)
 const headerTitle = computed(() => {
-  return (
-    headerCompany.company_fantasy_name ||
-    headerCompany.company_name ||
-    'Empresa atual'
-  )
+  return headerCompany.company_fantasy_name || headerCompany.company_name || 'Empresa atual'
 })
 
-// sincroniza quando a prop mudar (abrir modal / após salvar no pai)
 watch(
   () => props.company,
   (val) => {
     if (!val) return
-    // formulário edita uma cópia
     Object.assign(localCompany, val)
 
-    // garante defaults (caso backend ainda não mande)
     if (typeof localCompany.locale === 'undefined') localCompany.locale = null
     if (typeof localCompany.currency_code === 'undefined') localCompany.currency_code = null
 
-    // header mostra apenas o último estado salvo vindo da prop
     headerCompany.company_name = val.company_name || ''
     headerCompany.company_fantasy_name = val.company_fantasy_name || ''
     headerCompany.document_number = val.document_number || ''
@@ -303,7 +287,7 @@ const currentRegion = computed(() => {
   return getRegionFromCountryName(currentCountry.value?.name)
 })
 
-// máscaras dinâmicas com base na região derivada do país
+// máscaras
 const { mask: docMask } = useMask('document', currentRegion)
 const { mask: whatsMask } = useMask('whatsapp', currentRegion)
 const { mask: phoneMask } = useMask('phone', currentRegion)
@@ -325,10 +309,7 @@ const currencyOptions = ref([])
 
 function filterLocale (val, update) {
   update(() => {
-    if (!val) {
-      localeOptions.value = allLocales.value
-      return
-    }
+    if (!val) return (localeOptions.value = allLocales.value)
     const needle = val.toLowerCase()
     localeOptions.value = allLocales.value.filter(o =>
       `${o.label}`.toLowerCase().includes(needle) ||
@@ -339,10 +320,7 @@ function filterLocale (val, update) {
 
 function filterCurrency (val, update) {
   update(() => {
-    if (!val) {
-      currencyOptions.value = allCurrencies.value
-      return
-    }
+    if (!val) return (currencyOptions.value = allCurrencies.value)
     const needle = val.toLowerCase()
     currencyOptions.value = allCurrencies.value.filter(o =>
       `${o.label}`.toLowerCase().includes(needle) ||
@@ -351,7 +329,250 @@ function filterCurrency (val, update) {
   })
 }
 
-// carrega TODOS os países ao montar + inicializa locale/moeda
+function filterCountries (val, update) {
+  update(() => {
+    if (!val) return (countryOptions.value = allCountries.value)
+    const needle = val.toLowerCase()
+    countryOptions.value = allCountries.value.filter(c => c.name.toLowerCase().includes(needle))
+  })
+}
+
+/**
+ * Helpers seguros
+ */
+function safeUpper2 (v) {
+  const s = String(v || '').trim().toUpperCase()
+  return s.length === 2 ? s : ''
+}
+
+function extractLanguagesFromLibCountry (libCountry) {
+  if (!libCountry) return []
+  const langs = libCountry.languages
+
+  if (Array.isArray(langs)) {
+    return langs.map(s => String(s).toLowerCase()).filter(Boolean)
+  }
+
+  if (langs && typeof langs === 'object') {
+    return Object.keys(langs).map(s => String(s).toLowerCase()).filter(Boolean)
+  }
+
+  return []
+}
+
+function getPrimaryLanguage (langs) {
+  return (langs && langs[0]) ? langs[0] : 'en'
+}
+
+function getDisplayLocaleForCountry (iso2) {
+  const upper = safeUpper2(iso2)
+  const libCountry = upper ? countriesList[upper] : null
+  const langs = extractLanguagesFromLibCountry(libCountry)
+  const primary = getPrimaryLanguage(langs)
+  // se o locale ficar inválido, Intl normalmente aceita "en-XX", mas vamos cair pra en-US se der ruim
+  return upper ? `${primary}-${upper}` : 'en-US'
+}
+
+function makeDisplayNamesSafe (displayLocale) {
+  // nunca quebra
+  const can = typeof Intl.DisplayNames !== 'undefined'
+  if (!can) return { dnLang: null, dnRegion: null, dnCurrency: null }
+
+  const safe = (type) => {
+    try {
+      return new Intl.DisplayNames([displayLocale], { type })
+    } catch (e) {
+      console.warn(e)
+      // fallback genérico
+      try {
+        return new Intl.DisplayNames(['en-US'], { type })
+      } catch (e2) {
+        console.warn(e2)
+        return null
+      }
+    }
+  }
+
+  return {
+    dnLang: safe('language'),
+    dnRegion: safe('region'),
+    dnCurrency: safe('currency')
+  }
+}
+
+function isValidCurrency (currency) {
+  // valida com NumberFormat (se for inválida, estoura RangeError)
+  try {
+    new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(1)
+    return true
+  } catch (e) {
+    console.warn(e)
+    return false
+  }
+}
+
+function safeCurrencyName (displayLocale, currency) {
+  // tenta DisplayNames, se falhar, fallback para o próprio código
+  try {
+    const { dnCurrency } = makeDisplayNamesSafe(displayLocale)
+    const name = dnCurrency?.of(currency)
+    return name || currency
+  } catch (e) {
+    console.warn(e)
+    return currency
+  }
+}
+
+function safeCurrencySymbol (displayLocale, currency) {
+  try {
+    const parts = new Intl.NumberFormat(displayLocale, { style: 'currency', currency }).formatToParts(1)
+    return parts.find(p => p.type === 'currency')?.value || ''
+  } catch (e) {
+    console.warn(e)
+    return ''
+  }
+}
+
+function buildLocaleOptionsForCountry (iso2) {
+  const upper = safeUpper2(iso2)
+  if (!upper) return [{ value: 'en-US', label: 'English (United States) — en-US' }]
+
+  const libCountry = countriesList[upper]
+  const langs = extractLanguagesFromLibCountry(libCountry)
+  const primary = getPrimaryLanguage(langs)
+
+  const displayLocale = `${primary}-${upper}`
+  const { dnLang, dnRegion } = makeDisplayNamesSafe(displayLocale)
+
+  let regionName = upper
+  try {
+    regionName = dnRegion?.of(upper) || upper
+  } catch (e) {
+    console.warn(e)
+    regionName = upper
+  }
+
+  const set = new Set()
+  set.add(`${primary}-${upper}`)
+  langs.forEach(l => set.add(`${l}-${upper}`))
+  set.add(`en-${upper}`)
+
+  const values = Array.from(set)
+
+  const mapped = values.map(loc => {
+    const [lang] = loc.split('-')
+    let langName = lang
+    try {
+      langName = dnLang?.of(lang) || lang
+    } catch (e) {
+      console.warn(e)
+      langName = lang
+    }
+    return { value: loc, label: `${langName} (${regionName}) — ${loc}` }
+  })
+
+  return mapped.length ? mapped : [{ value: 'en-US', label: 'English (United States) — en-US' }]
+}
+
+function buildCurrencyOptionsForCountry (iso2) {
+  const upper = safeUpper2(iso2)
+  const fallbackDisplay = 'en-US'
+
+  // fallback ABSOLUTO
+  const fallback = () => {
+    const currency = 'USD'
+    const name = safeCurrencyName(fallbackDisplay, currency)
+    const symbol = safeCurrencySymbol(fallbackDisplay, currency)
+    const label = symbol ? `${name} (${symbol}) — ${currency}` : `${name} — ${currency}`
+    return [{ value: currency, label }]
+  }
+
+  if (!upper) return fallback()
+
+  const libCountry = countriesList[upper]
+  const raw = libCountry?.currency ? String(libCountry.currency).trim().toUpperCase() : ''
+  const currency = raw || ''
+
+  if (!currency) return fallback()
+
+  // se currency for inválida pra Intl, cai pro USD
+  if (!isValidCurrency(currency)) return fallback()
+
+  const displayLocale = getDisplayLocaleForCountry(upper)
+
+  const name = safeCurrencyName(displayLocale, currency)
+  const symbol = safeCurrencySymbol(displayLocale, currency)
+  const nice = symbol ? `${name} (${symbol}) — ${currency}` : `${name} — ${currency}`
+
+  return [{ value: currency, label: nice }]
+}
+
+function applyCountryDerivedLocaleAndCurrency (iso2) {
+  localeLoading.value = true
+  currencyLoading.value = true
+
+  try {
+    const locales = buildLocaleOptionsForCountry(iso2)
+    const currencies = buildCurrencyOptionsForCountry(iso2)
+
+    allLocales.value = locales
+    localeOptions.value = locales
+
+    allCurrencies.value = currencies
+    currencyOptions.value = currencies
+
+    // defaults coerentes e sempre existentes
+    const localeValues = new Set(locales.map(o => o.value))
+    if (!localCompany.locale || !localeValues.has(localCompany.locale)) {
+      localCompany.locale = locales[0]?.value || 'en-US'
+    }
+
+    const currencyValues = new Set(currencies.map(o => o.value))
+    if (!localCompany.currency_code || !currencyValues.has(localCompany.currency_code)) {
+      localCompany.currency_code = currencies[0]?.value || 'USD'
+    }
+  } catch (e) {
+    console.error('applyCountryDerivedLocaleAndCurrency error', e)
+
+    // fallback “global”
+    const locales = [{ value: 'en-US', label: 'English (United States) — en-US' }]
+    const currencies = buildCurrencyOptionsForCountry(null)
+
+    allLocales.value = locales
+    localeOptions.value = locales
+    allCurrencies.value = currencies
+    currencyOptions.value = currencies
+
+    localCompany.locale = locales[0].value
+    localCompany.currency_code = currencies[0].value
+  } finally {
+    localeLoading.value = false
+    currencyLoading.value = false
+  }
+}
+
+watch(
+  () => currentCountry.value?.iso2,
+  (iso2) => {
+    if (!iso2) {
+      // limpa e deixa fallback leve
+      const locales = [{ value: 'en-US', label: 'English (United States) — en-US' }]
+      const currencies = buildCurrencyOptionsForCountry(null)
+
+      allLocales.value = locales
+      localeOptions.value = locales
+      allCurrencies.value = currencies
+      currencyOptions.value = currencies
+
+      if (!localCompany.locale) localCompany.locale = locales[0].value
+      if (!localCompany.currency_code) localCompany.currency_code = currencies[0].value
+      return
+    }
+    applyCountryDerivedLocaleAndCurrency(iso2)
+  },
+  { immediate: true }
+)
+
 onMounted(async () => {
   if (!countriesStore.items.length) {
     await countriesStore.fetchCountries({
@@ -364,28 +585,7 @@ onMounted(async () => {
 
   allCountries.value = (countriesStore.items || []).slice()
   countryOptions.value = allCountries.value
-
-  // init locale/moeda
-  allLocales.value = LOCALE_LIST.slice()
-  localeOptions.value = allLocales.value
-
-  allCurrencies.value = CURRENCY_LIST.slice()
-  currencyOptions.value = allCurrencies.value
 })
-
-function filterCountries (val, update) {
-  update(() => {
-    if (!val) {
-      countryOptions.value = allCountries.value
-      return
-    }
-
-    const needle = val.toLowerCase()
-    countryOptions.value = allCountries.value.filter(
-      c => c.name.toLowerCase().includes(needle)
-    )
-  })
-}
 
 async function onSubmit () {
   const ok = await formRef.value.validate()
@@ -393,9 +593,7 @@ async function onSubmit () {
 
   loading.value = true
   try {
-    // envia os dados editados para o pai persistir
     emit('save', { ...localCompany })
-    // quem atualiza o header é o pai, ao atualizar a prop `company`
   } catch (e) {
     console.error(e)
     $q.notify({ type: 'negative', message: 'Erro ao salvar os dados da empresa.' })
@@ -403,49 +601,6 @@ async function onSubmit () {
     loading.value = false
   }
 }
-
-// Locales comuns (se quiser “todas do mundo”, melhor externalizar para asset)
-const LOCALE_LIST = [
-  { label: 'Português (Brasil) - pt-BR', value: 'pt-BR' },
-  { label: 'Português (Portugal) - pt-PT', value: 'pt-PT' },
-  { label: 'English (US) - en-US', value: 'en-US' },
-  { label: 'English (UK) - en-GB', value: 'en-GB' },
-  { label: 'Español (ES) - es-ES', value: 'es-ES' },
-  { label: 'Español (AR) - es-AR', value: 'es-AR' },
-  { label: 'Français (FR) - fr-FR', value: 'fr-FR' },
-  { label: 'Deutsch (DE) - de-DE', value: 'de-DE' },
-  { label: 'Italiano (IT) - it-IT', value: 'it-IT' },
-  { label: 'Nederlands (NL) - nl-NL', value: 'nl-NL' },
-  { label: '日本語 (JP) - ja-JP', value: 'ja-JP' },
-  { label: '한국어 (KR) - ko-KR', value: 'ko-KR' },
-  { label: '中文 (CN) - zh-CN', value: 'zh-CN' }
-]
-
-// Moedas (ampla; se quiser 100% ISO-4217, melhor externalizar para asset)
-const CURRENCY_LIST = [
-  { label: 'BRL - Real', value: 'BRL' },
-  { label: 'USD - US Dollar', value: 'USD' },
-  { label: 'EUR - Euro', value: 'EUR' },
-  { label: 'GBP - Pound Sterling', value: 'GBP' },
-  { label: 'CAD - Canadian Dollar', value: 'CAD' },
-  { label: 'AUD - Australian Dollar', value: 'AUD' },
-  { label: 'NZD - New Zealand Dollar', value: 'NZD' },
-  { label: 'ARS - Argentine Peso', value: 'ARS' },
-  { label: 'CLP - Chilean Peso', value: 'CLP' },
-  { label: 'COP - Colombian Peso', value: 'COP' },
-  { label: 'MXN - Mexican Peso', value: 'MXN' },
-  { label: 'PEN - Peruvian Sol', value: 'PEN' },
-  { label: 'UYU - Uruguayan Peso', value: 'UYU' },
-  { label: 'JPY - Japanese Yen', value: 'JPY' },
-  { label: 'CNY - Chinese Yuan', value: 'CNY' },
-  { label: 'HKD - Hong Kong Dollar', value: 'HKD' },
-  { label: 'SGD - Singapore Dollar', value: 'SGD' },
-  { label: 'KRW - South Korean Won', value: 'KRW' },
-  { label: 'INR - Indian Rupee', value: 'INR' },
-  { label: 'AED - UAE Dirham', value: 'AED' },
-  { label: 'SAR - Saudi Riyal', value: 'SAR' },
-  { label: 'ZAR - South African Rand', value: 'ZAR' }
-]
 </script>
 
 <style scoped>
@@ -457,22 +612,18 @@ const CURRENCY_LIST = [
   flex-direction: column;
 }
 
-/* header com padding alinhado e visual mais parecido com o do perfil */
 .company-dialog-header {
   padding: 20px 28px 14px 28px;
 }
 
-/* body com respiro */
 .company-dialog-body {
   padding: 18px 28px 24px 28px;
 }
 
-/* mais espaço entre campos */
 .company-fields-grid .company-field {
   margin-bottom: 12px;
 }
 
-/* scroll interno se a tela for menor */
 .company-dialog-card > .company-dialog-body {
   overflow-y: auto;
 }
