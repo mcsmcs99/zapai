@@ -20,7 +20,7 @@ export const useAppointmentsStore = defineStore('appointments', {
     meta: {
       total: 0,
       page: 1,
-      limit: 30,
+      limit: 20,
       totalPages: 1
     },
 
@@ -291,9 +291,16 @@ export const useAppointmentsStore = defineStore('appointments', {
 
         if (!groupId) console.warn('Nenhum grupo selecionado ao listar agendamentos.')
 
+        // ✅ resolve page/limit e grava no meta (pra UI refletir)
+        const page = Number(params.page ?? this.meta.page ?? 1) || 1
+        const limit = Number(params.limit ?? this.meta.limit ?? 30) || 30
+
+        this.meta.page = page
+        this.meta.limit = limit
+
         const query = {
-          page: params.page || this.meta.page,
-          limit: params.limit || this.meta.limit,
+          page,
+          limit,
           user_id: userId,
           group_id: groupId
         }
@@ -316,7 +323,15 @@ export const useAppointmentsStore = defineStore('appointments', {
           : []
 
         if (data.meta) {
-          this.meta = { ...this.meta, ...data.meta }
+          // ✅ garante números
+          this.meta = {
+            ...this.meta,
+            ...data.meta,
+            page: Number(data.meta.page ?? page) || page,
+            limit: Number(data.meta.limit ?? limit) || limit,
+            total: Number(data.meta.total ?? 0) || 0,
+            totalPages: Number(data.meta.totalPages ?? data.meta.total_pages ?? 1) || 1
+          }
         } else {
           this.meta.total = this.appointments.length
           this.meta.totalPages = 1

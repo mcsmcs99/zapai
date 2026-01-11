@@ -100,9 +100,16 @@
       </q-card-section>
     </q-card>
 
-    <!-- Lista (agrupada por dia) -->
+    <!-- Lista (paginada no backend) -->
     <q-card flat bordered class="q-mt-md">
-      <q-card-section class="text-h6 text-weight-bold">Próximos Agendamentos</q-card-section>
+      <q-card-section class="row items-center justify-between">
+        <div class="text-h6 text-weight-bold">Próximos Agendamentos</div>
+
+        <div class="text-caption text-grey-7">
+          Total: {{ meta.total }} • Página {{ meta.page }} de {{ meta.totalPages }}
+        </div>
+      </q-card-section>
+
       <q-separator />
 
       <div v-if="!groups.length" class="q-pa-xl flex flex-center column text-grey-7">
@@ -175,6 +182,25 @@
           </q-list>
         </div>
       </div>
+
+      <!-- Paginação -->
+      <q-separator />
+
+      <q-card-section class="row items-center justify-between">
+        <div class="text-caption text-grey-7">
+          Exibindo {{ appointments.length }} de {{ meta.total }}
+        </div>
+
+        <q-pagination
+          v-model="page"
+          :max="meta.totalPages || 1"
+          :max-pages="7"
+          boundary-numbers
+          direction-links
+          :disable="loadingList"
+          @update:model-value="changePage"
+        />
+      </q-card-section>
     </q-card>
 
     <!-- Dialog criar/editar/visualizar -->
@@ -212,7 +238,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import AppointmentEditorDialog from 'components/AppointmentEditorDialog.vue'
 
@@ -222,13 +248,33 @@ import { useAppointmentsStore } from 'src/stores/tenant/appointments'
 
 defineOptions({ name: 'AppointmentsPage' })
 
+/* ---------------- stores ---------------- */
 const servicesStore = useServicesStore()
 const staffStore = useStaffStore()
 const appointmentsStore = useAppointmentsStore()
 
 const { services } = storeToRefs(servicesStore)
 const { staff } = storeToRefs(staffStore)
-const { appointments } = storeToRefs(appointmentsStore)
+const { appointments, meta, loadingList } = storeToRefs(appointmentsStore)
+
+/* ---------------- pagination (backend) ---------------- */
+const page = ref(Number(meta.value?.page || 1))
+
+watch(
+  () => meta.value?.page,
+  (p) => {
+    const next = Number(p || 1)
+    if (next !== page.value) page.value = next
+  }
+)
+
+async function changePage (p) {
+  const next = Number(p || 1)
+  if (next === Number(meta.value?.page || 1)) return
+  await appointmentsStore.fetchAppointments({ page: next })
+}
+
+/* ---------------- staff/services helpers ---------------- */
 
 /** ✅ só ativos (evita agendar com inativo) */
 const activeStaff = computed(() =>
@@ -247,10 +293,6 @@ const staffById = computed(() => {
   return map
 })
 
-/**
- * ✅ helper: retorna staff válido para um serviceId
- * usa a nova regra: service.collaboratorIds (pivot)
- */
 function getStaffForService (serviceId) {
   const s = serviceById.value.get(Number(serviceId))
   const ids = Array.isArray(s?.collaboratorIds) ? s.collaboratorIds.map(Number) : []
@@ -258,10 +300,6 @@ function getStaffForService (serviceId) {
   return activeStaff.value.filter(p => ids.includes(Number(p.id)))
 }
 
-/**
- * ✅ mapa pronto: { [serviceId]: staff[] }
- * (é útil pro dialog filtrar rapidamente sem duplicar lógica)
- */
 const staffByServiceId = computed(() => {
   const out = {}
   for (const s of (services.value || [])) {
@@ -271,7 +309,7 @@ const staffByServiceId = computed(() => {
 })
 
 /**
- * ✅ staff enviado ao dialog:
+ * staff enviado ao dialog:
  * - se está edit/view e tem service_id, manda staff já filtrado pelo serviço
  * - senão manda staff ativo inteiro (create sem serviço selecionado ainda)
  */
@@ -290,6 +328,7 @@ const staffForDialog = computed(() => {
   return activeStaff.value
 })
 
+/* ---------------- appointments (enriched) ---------------- */
 const appointmentsEnriched = computed(() => {
   return (appointments.value || []).map(a => {
     const serviceId = Number(a.service_id ?? a.serviceId ?? 0)
@@ -302,16 +341,12 @@ const appointmentsEnriched = computed(() => {
       ...a,
       service: s?.title || 'Serviço não encontrado',
       collaborator: c?.name || 'Colaborador não encontrado',
-      customer:
-        a.customer_name ??
-        a.customerName ??
-        a.customer ??
-        ''
+      customer: a.customer_name ?? a.customerName ?? a.customer ?? ''
     }
   })
 })
 
-/* -------- dialog (create/edit/view) -------- */
+/* ---------------- dialog (create/edit/view) ---------------- */
 const dlg = reactive({
   open: false,
   mode: 'create',
@@ -334,11 +369,12 @@ async function onSaveAppointment (payload) {
   }
 
   if (resp?.ok) {
-    await appointmentsStore.fetchAppointments()
+    // mantém na página atual
+    await appointmentsStore.fetchAppointments({ page: meta.value?.page || 1 })
   }
 }
 
-/* -------- regras de ações -------- */
+/* ---------------- rules/actions ---------------- */
 const todayISO = () => new Date().toISOString().slice(0, 10)
 
 function isPastDate (a) {
@@ -390,7 +426,7 @@ function reschedule (a) {
   dlg.open = true
 }
 
-/* cancelar */
+/* ---------------- cancel dialog ---------------- */
 const cancelDlg = reactive({ open: false, row: null })
 
 function cancel (a) {
@@ -408,11 +444,11 @@ async function confirmCancel () {
   if (resp?.ok) {
     cancelDlg.open = false
     cancelDlg.row = null
-    await appointmentsStore.fetchAppointments()
+    await appointmentsStore.fetchAppointments({ page: meta.value?.page || 1 })
   }
 }
 
-/* ------- Filtros / listagem ------- */
+/* ---------------- filters (local) ---------------- */
 const f = ref({ q: '', status: 'all', collab: 'all', service: 'all', from: '', to: '' })
 
 const statusOpts = [
@@ -422,11 +458,12 @@ const statusOpts = [
   { label: 'Concluído', value: 'done' },
   { label: 'Cancelado', value: 'cancelled' }
 ]
+
 const statusMap = {
-  pending:   { label: 'Pendente',   bg: 'orange-1', text: 'orange-10' },
-  confirmed: { label: 'Confirmado', bg: 'green-1',  text: 'green-9' },
-  done:      { label: 'Concluído',  bg: 'grey-2',   text: 'grey-9' },
-  cancelled: { label: 'Cancelado',  bg: 'red-1',    text: 'red-10' }
+  pending: { label: 'Pendente', bg: 'orange-1', text: 'orange-10' },
+  confirmed: { label: 'Confirmado', bg: 'green-1', text: 'green-9' },
+  done: { label: 'Concluído', bg: 'grey-2', text: 'grey-9' },
+  cancelled: { label: 'Cancelado', bg: 'red-1', text: 'red-10' }
 }
 
 const collabOpts = computed(() => {
@@ -521,7 +558,7 @@ function resetFilters () {
 
 const formatGroupLabel = (iso) => fmtDateLong(iso)
 
-/* ------- lifecycle ------- */
+/* ---------------- lifecycle ---------------- */
 onMounted(async () => {
   servicesStore.loadFromSession()
   staffStore.loadFromSession?.()
@@ -529,7 +566,7 @@ onMounted(async () => {
 
   await servicesStore.fetchServices()
   await staffStore.fetchStaff()
-  await appointmentsStore.fetchAppointments()
+  await appointmentsStore.fetchAppointments({ page: meta.value?.page || 1 })
 })
 </script>
 
