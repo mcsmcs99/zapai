@@ -11,11 +11,16 @@ const GROUP_FALLBACK_KEY = 'tenant:last_group_id'
 
 export const useAppointmentsStore = defineStore('appointments', {
   state: () => ({
+    /* ---------------- flags ---------------- */
     loadingList: false,
     loadingItem: false,
     saving: false,
     deleting: false,
 
+    // Usado pelo editor (slots) - NÃO afeta a listagem paginada
+    loadingConflicts: false,
+
+    /* ---------------- listagem (paginada) ---------------- */
     appointments: [],
     meta: {
       total: 0,
@@ -31,6 +36,15 @@ export const useAppointmentsStore = defineStore('appointments', {
       to: ''
     },
 
+    /* ---------------- conflitos (slots do editor) ---------------- */
+    conflicts: [],
+    conflictsMeta: {
+      date: '',
+      collaboratorId: null,
+      excludeId: null
+    },
+
+    /* ---------------- current ---------------- */
     currentAppointment: {
       id: null,
       date: '',
@@ -61,7 +75,7 @@ export const useAppointmentsStore = defineStore('appointments', {
       if (!Number.isFinite(gid) || gid <= 0) return
       try {
         localStorage.setItem(GROUP_FALLBACK_KEY, String(gid))
-      } catch (e) {console.warn(e)}
+      } catch (e) { console.warn(e) }
     },
 
     // ✅ resolve groupId por múltiplas fontes (auth -> localStorage -> session)
@@ -80,7 +94,7 @@ export const useAppointmentsStore = defineStore('appointments', {
         const raw = localStorage.getItem(GROUP_FALLBACK_KEY)
         const gid = Number(raw)
         if (Number.isFinite(gid) && gid > 0) return gid
-      } catch (e) {console.warn(e)}
+      } catch (e) { console.warn(e) }
 
       // fallback: session (caso você tenha salvo antes no appointments_state)
       try {
@@ -94,7 +108,7 @@ export const useAppointmentsStore = defineStore('appointments', {
           const gid = Number(maybe)
           if (Number.isFinite(gid) && gid > 0) return gid
         }
-      } catch (e) {console.warn(e)}
+      } catch (e) { console.warn(e) }
 
       return null
     },
@@ -107,7 +121,6 @@ export const useAppointmentsStore = defineStore('appointments', {
     resolveContextIds (params = {}) {
       const userId = Number(params.user_id ?? params.userId ?? this.getCurrentUserId() ?? 0) || null
 
-      // group pode vir por params (ex.: page mandou), senão pega do helper robusto
       const groupFromParams = Number(params.group_id ?? params.groupId ?? 0)
       const groupId = (Number.isFinite(groupFromParams) && groupFromParams > 0)
         ? groupFromParams
@@ -256,6 +269,7 @@ export const useAppointmentsStore = defineStore('appointments', {
         meta: this.meta,
         filters: this.filters,
         currentAppointment: this.currentAppointment
+        // ⚠️ conflicts não precisa persistir em sessão (evita cache errado)
       }
       sessionStorage.setItem(KEY, JSON.stringify(payload))
     },
@@ -282,6 +296,90 @@ export const useAppointmentsStore = defineStore('appointments', {
       sessionStorage.removeItem(KEY)
     },
 
+    /* ---------------- conflicts (editor slots) ---------------- */
+
+    resetConflicts () {
+      this.conflicts = []
+      this.conflictsMeta = {
+        date: '',
+        collaboratorId: null,
+        excludeId: null
+      }
+    },
+
+    /**
+     * ✅ NOVA ROTA DEDICADA
+     * GET /tenant/appointments/conflicts
+     *
+     * Busca agendamentos do dia/colaborador para bloquear slots no editor.
+     * Não filtra por serviço (regra nova).
+     *
+     * params:
+     * - date (ISO YYYY-MM-DD)
+     * - collaboratorId (ou collaborator_id)
+     * - excludeId (ou exclude_id) (opcional)
+     */
+    async fetchConflictsForSlot (params = {}) {
+      const date = String(params.date || '')
+      const collaboratorId = Number(params.collaboratorId ?? params.collaborator_id ?? 0) || null
+      const excludeId = Number(params.excludeId ?? params.exclude_id ?? 0) || null
+
+      if (!date || !collaboratorId) {
+        this.resetConflicts()
+        return { ok: true, data: [] }
+      }
+
+      // ✅ evita refetch desnecessário
+      const sameQuery =
+        this.conflictsMeta.date === date &&
+        Number(this.conflictsMeta.collaboratorId || 0) === Number(collaboratorId || 0) &&
+        Number(this.conflictsMeta.excludeId || 0) === Number(excludeId || 0)
+
+      if (sameQuery && Array.isArray(this.conflicts)) {
+        return { ok: true, data: this.conflicts }
+      }
+
+      this.loadingConflicts = true
+      try {
+        const { userId, groupId } = this.resolveContextIds(params)
+
+        if (!groupId) {
+          this.resetConflicts()
+          return { ok: false, error: 'Nenhum grupo selecionado.' }
+        }
+
+        const query = {
+          user_id: userId,
+          group_id: groupId,
+
+          date,
+          collaborator_id: collaboratorId
+        }
+
+        if (excludeId) query.exclude_id = excludeId
+
+        const { data: resp } = await api.get('/tenant/appointments/conflicts', { params: query })
+
+        const list = resp?.data || resp || []
+        const normalized = Array.isArray(list) ? list.map(this.normalizeAppointment) : []
+
+        this.conflicts = normalized
+        this.conflictsMeta = { date, collaboratorId, excludeId }
+
+        return { ok: true, data: normalized }
+      } catch (err) {
+        console.error('Erro ao buscar conflitos do dia:', err)
+        this.resetConflicts()
+
+        // sem notify aqui pra não poluir UX do editor (mas se quiser, pode ligar)
+        // Notify.create({ type: 'negative', message: 'Erro ao carregar conflitos do dia.' })
+
+        return { ok: false, error: 'Erro ao carregar conflitos do dia.' }
+      } finally {
+        this.loadingConflicts = false
+      }
+    },
+
     /* ---------------- CRUD ---------------- */
 
     async fetchAppointments (params = {}) {
@@ -293,7 +391,7 @@ export const useAppointmentsStore = defineStore('appointments', {
 
         // ✅ resolve page/limit e grava no meta (pra UI refletir)
         const page = Number(params.page ?? this.meta.page ?? 1) || 1
-        const limit = Number(params.limit ?? this.meta.limit ?? 30) || 30
+        const limit = Number(params.limit ?? this.meta.limit ?? 20) || 20
 
         this.meta.page = page
         this.meta.limit = limit
@@ -317,13 +415,10 @@ export const useAppointmentsStore = defineStore('appointments', {
 
         const { data } = await api.get('/tenant/appointments', { params: query })
 
-        const list = data.data || data || []
-        this.appointments = Array.isArray(list)
-          ? list.map(this.normalizeAppointment)
-          : []
+        const list = data?.data || data || []
+        this.appointments = Array.isArray(list) ? list.map(this.normalizeAppointment) : []
 
-        if (data.meta) {
-          // ✅ garante números
+        if (data?.meta) {
           this.meta = {
             ...this.meta,
             ...data.meta,
@@ -389,7 +484,6 @@ export const useAppointmentsStore = defineStore('appointments', {
       try {
         const { userId, groupId } = this.resolveContextIds(params)
 
-        // ✅ se ainda não tiver groupId, tenta uma última vez usando fallback salvo
         if (!groupId) {
           const msg = 'Nenhum grupo selecionado para salvar agendamento.'
           Notify.create({ type: 'negative', message: msg })
@@ -466,6 +560,9 @@ export const useAppointmentsStore = defineStore('appointments', {
         else this.appointments.unshift(normalized)
 
         this.saveToSession()
+
+        // ✅ após salvar, limpa conflitos para forçar refresh no editor se reabrir
+        this.resetConflicts()
 
         Notify.create({
           type: 'positive',
@@ -569,6 +666,10 @@ export const useAppointmentsStore = defineStore('appointments', {
         if (this.currentAppointment.id === id) this.resetCurrentAppointment()
 
         this.saveToSession()
+
+        // ✅ remove conflitos cacheados (se o editor estiver aberto depois)
+        this.resetConflicts()
+
         Notify.create({ type: 'positive', message: 'Agendamento removido com sucesso.' })
 
         return { ok: true, data }

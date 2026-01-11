@@ -94,6 +94,14 @@
             </q-banner>
 
             <q-banner
+              v-else-if="loadingConflicts"
+              rounded
+              class="bg-grey-2 text-grey-9"
+            >
+              Carregando horários do dia…
+            </q-banner>
+
+            <q-banner
               v-else-if="slotOptions.length === 0"
               rounded
               class="bg-red-1 text-red-10"
@@ -107,7 +115,7 @@
               type="radio"
               :options="slotOptions"
               class="slots-group"
-              :disable="isView"
+              :disable="isView || loadingConflicts"
             />
           </div>
 
@@ -145,6 +153,8 @@
 
 <script setup>
 import { reactive, watch, computed } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useAppointmentsStore } from 'src/stores/tenant/appointments'
 
 defineOptions({ name: 'AppointmentEditorDialog' })
 
@@ -156,6 +166,8 @@ const props = defineProps({
 
   services: { type: Array, default: () => [] },
   staff: { type: Array, default: () => [] },
+
+  // ⚠️ mantido por compat (não é mais usado pros slots, agora vem do store)
   appointments: { type: Array, default: () => [] },
 
   // ✅ opcional (se você passar da page, ajuda, mas não é obrigatório)
@@ -163,6 +175,10 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:modelValue', 'save'])
+
+/* ---------------- store (conflitos de slots) ---------------- */
+const appointmentsStore = useAppointmentsStore()
+const { conflicts, loadingConflicts } = storeToRefs(appointmentsStore)
 
 const isView = computed(() => props.mode === 'view')
 const title = computed(() => {
@@ -190,38 +206,53 @@ function resetLocal () {
 function fillFromValue (v) {
   local.service_id = v?.service_id ?? v?.serviceId ?? null
   local.collaborator_id = v?.collaborator_id ?? v?.collaboratorId ?? null
-  local.dateBR = v?.dateBR ?? ''
+
+  // ✅ se vier ISO, converte pra BR (evita dateBR vazio no edit)
+  if (v?.date && /^\d{4}-\d{2}-\d{2}$/.test(String(v.date))) {
+    const [y, m, d] = String(v.date).split('-')
+    local.dateBR = `${d}/${m}/${y}`
+  } else {
+    local.dateBR = v?.dateBR ?? ''
+  }
+
   local.start = v?.start ?? ''
   local.customer_name = v?.customer_name ?? v?.customerName ?? ''
 }
 
+/* ---------------- open/fill ---------------- */
 watch(
   () => props.modelValue,
-  (open) => {
-    if (!open) return
-
-    if (props.value) {
-      fillFromValue(props.value)
+  async (open) => {
+    if (!open) {
+      appointmentsStore.resetConflicts()
       return
     }
 
-    resetLocal()
-    local.dateBR = todayBR()
+    if (props.value) {
+      fillFromValue(props.value)
+    } else {
+      resetLocal()
+      local.dateBR = todayBR()
+    }
+
+    await fetchConflictsIfReady()
   }
 )
 
-// opcional: se trocar dlg.value com o dialog aberto
 watch(
   () => props.value,
-  (v) => {
-    if (props.modelValue && v) fillFromValue(v)
+  async (v) => {
+    if (props.modelValue && v) {
+      fillFromValue(v)
+      await fetchConflictsIfReady()
+    }
   }
 )
 
-/* helpers */
+/* ---------------- helpers ---------------- */
 const parseBR = (s) => {
   if (!s) return null
-  const [d, m, y] = s.split('/').map(Number)
+  const [d, m, y] = String(s).split('/').map(Number)
   if (!d || !m || !y) return null
   return new Date(y, m - 1, d)
 }
@@ -253,14 +284,13 @@ const todayISO = () => {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 }
 const minDateISO = computed(() => todayISO())
-// QDate: permite somente dias >= hoje
 const dateOptions = (iso) => iso >= minDateISO.value
 const todayBR = () => {
   const d = new Date()
   return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`
 }
 
-/* dados derivados */
+/* ---------------- dados derivados ---------------- */
 const activeServices = computed(() => (props.services || []).filter(s => s.status === 'active'))
 const activeStaff = computed(() => (props.staff || []).filter(s => s.status === 'active'))
 
@@ -280,11 +310,6 @@ const selectedCollaborator = computed(() => {
   return activeStaff.value.find(c => Number(c.id) === Number(id)) || null
 })
 
-/**
- * ✅ normaliza ids vindos do serviço:
- * - novo: collaboratorIds (array)
- * - legado: collaborator_ids (array/json)
- */
 function getServiceCollaboratorIds (service) {
   if (!service) return []
   const raw =
@@ -294,14 +319,13 @@ function getServiceCollaboratorIds (service) {
 
   if (Array.isArray(raw)) return raw.map(Number).filter(n => Number.isFinite(n))
 
-  // fallback: se vier string JSON ou CSV
   if (typeof raw === 'string') {
     const s = raw.trim()
     if (!s) return []
     try {
       const j = JSON.parse(s)
       if (Array.isArray(j)) return j.map(Number).filter(n => Number.isFinite(n))
-    } catch (e) {console.warn(e)}
+    } catch (e) { console.warn(e) }
     return s
       .split(',')
       .map(x => Number(String(x).trim()))
@@ -314,7 +338,6 @@ function getServiceCollaboratorIds (service) {
 const collaboratorOptions = computed(() => {
   if (!selectedService.value) return []
 
-  // ✅ se a page mandou mapa pronto, usa (não é obrigatório)
   const mapped = props.staffByServiceId?.[Number(selectedService.value.id)]
   if (Array.isArray(mapped) && mapped.length) {
     return mapped.map(c => ({ label: c.name, value: c.id }))
@@ -326,44 +349,46 @@ const collaboratorOptions = computed(() => {
     .map(c => ({ label: c.name, value: c.id }))
 })
 
-/**
- * ✅ resets encadeados:
- * - trocou serviço -> zera colaborador e dependências
- * - trocou colaborador -> zera data e slots
- * - trocou data -> zera slot
- *
- * (mantém as lógicas atuais, só evita ficar com seleção inválida)
- */
+/* ---------------- resets encadeados ---------------- */
 watch(
   () => local.service_id,
-  (newVal, oldVal) => {
+  async (newVal, oldVal) => {
     if (!props.modelValue) return
     if (Number(newVal || 0) === Number(oldVal || 0)) return
 
     local.collaborator_id = null
     local.dateBR = props.mode === 'create' ? todayBR() : ''
     local.start = ''
+
+    appointmentsStore.resetConflicts()
   }
 )
 
 watch(
   () => local.collaborator_id,
-  (newVal, oldVal) => {
+  async (newVal, oldVal) => {
     if (!props.modelValue) return
     if (Number(newVal || 0) === Number(oldVal || 0)) return
 
     // colaborador muda -> data/slot precisam ser revalidos
     local.dateBR = props.mode === 'create' ? todayBR() : local.dateBR
     local.start = ''
+
+    appointmentsStore.resetConflicts()
+    await fetchConflictsIfReady()
   }
 )
 
 watch(
   () => local.dateBR,
-  (newVal, oldVal) => {
+  async (newVal, oldVal) => {
     if (!props.modelValue) return
     if (String(newVal || '') === String(oldVal || '')) return
+
     local.start = ''
+
+    appointmentsStore.resetConflicts()
+    await fetchConflictsIfReady()
   }
 )
 
@@ -376,41 +401,53 @@ watch(
     if (!ok) {
       local.collaborator_id = null
       local.start = ''
+      appointmentsStore.resetConflicts()
     }
   }
 )
 
+/* ---------------- conflicts (nova rota) ---------------- */
 const canShowSlots = computed(() =>
   !!local.service_id && !!local.collaborator_id && !!toISOFromBR(local.dateBR)
 )
 
 const currentAppointmentId = computed(() => props.value?.id ?? null)
 
+async function fetchConflictsIfReady () {
+  if (!props.modelValue) return
+  if (!canShowSlots.value) return
+
+  const dateISO = toISOFromBR(local.dateBR)
+  if (!dateISO) return
+
+  // ✅ NOVO: não envia serviceId (rota não filtra serviço)
+  await appointmentsStore.fetchConflictsForSlot({
+    date: dateISO,
+    collaboratorId: Number(local.collaborator_id),
+    excludeId: currentAppointmentId.value ? Number(currentAppointmentId.value) : null
+  })
+}
+
+watch(
+  () => canShowSlots.value,
+  async (ok) => {
+    if (!props.modelValue) return
+    if (!ok) {
+      appointmentsStore.resetConflicts()
+      return
+    }
+    await fetchConflictsIfReady()
+  }
+)
+
+/* ---------------- busyRanges usando conflicts do store ---------------- */
 const busyRanges = computed(() => {
   if (!canShowSlots.value) return []
 
-  const dateISO = toISOFromBR(local.dateBR)
-
-  const list = Array.isArray(props.appointments)
-    ? props.appointments
-    : (props.appointments?.data || [])
+  const list = Array.isArray(conflicts.value) ? conflicts.value : []
 
   return list
-    .filter(a => {
-      const aDate = a.date
-      const aStatus = a.status
-      const isActive = aStatus !== 'cancelled'
-
-      const aCollabId = (a.collaborator_id ?? a.collaboratorId)
-      const sameCollab = Number(aCollabId) === Number(local.collaborator_id)
-      const sameDay = aDate === dateISO
-
-      const isSameRecord =
-        currentAppointmentId.value &&
-        Number(a.id) === Number(currentAppointmentId.value)
-
-      return sameDay && sameCollab && isActive && !isSameRecord
-    })
+    .filter(a => a?.status !== 'cancelled')
     .map(a => ({
       startMin: toMin(a.start),
       endMin: toMin(a.end)
@@ -425,8 +462,10 @@ function overlapsAnyBusy (startMin, endMin) {
   return false
 }
 
+/* ---------------- slots ---------------- */
 const slotOptions = computed(() => {
   if (!canShowSlots.value) return []
+  if (loadingConflicts.value) return []
 
   const service = selectedService.value
   const collab = selectedCollaborator.value
@@ -481,9 +520,11 @@ watch(
   }
 )
 
+/* ---------------- submit ---------------- */
 const canSubmit = computed(() => {
   if (isView.value) return false
   if (!canShowSlots.value) return false
+  if (loadingConflicts.value) return false
   if (!local.start) return false
 
   if (props.mode === 'create' && !local.customer_name.trim()) return false
@@ -502,9 +543,7 @@ function onSubmit () {
   if (!duration || duration <= 0) return
 
   // Hard-block: se conflitar, não salva
-  if (overlapsAnyBusy(startMin, endMin)) {
-    return
-  }
+  if (overlapsAnyBusy(startMin, endMin)) return
 
   const payload = {
     service_id: Number(local.service_id),
