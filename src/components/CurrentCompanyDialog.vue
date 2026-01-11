@@ -520,21 +520,10 @@ function applyCountryDerivedLocaleAndCurrency (iso2) {
 
     allCurrencies.value = currencies
     currencyOptions.value = currencies
-
-    // defaults coerentes e sempre existentes
-    const localeValues = new Set(locales.map(o => o.value))
-    if (!localCompany.locale || !localeValues.has(localCompany.locale)) {
-      localCompany.locale = locales[0]?.value || 'en-US'
-    }
-
-    const currencyValues = new Set(currencies.map(o => o.value))
-    if (!localCompany.currency_code || !currencyValues.has(localCompany.currency_code)) {
-      localCompany.currency_code = currencies[0]?.value || 'USD'
-    }
   } catch (e) {
     console.error('applyCountryDerivedLocaleAndCurrency error', e)
 
-    // fallback “global”
+    // fallback só de opções (sem setar v-model)
     const locales = [{ value: 'en-US', label: 'English (United States) — en-US' }]
     const currencies = buildCurrencyOptionsForCountry(null)
 
@@ -542,9 +531,6 @@ function applyCountryDerivedLocaleAndCurrency (iso2) {
     localeOptions.value = locales
     allCurrencies.value = currencies
     currencyOptions.value = currencies
-
-    localCompany.locale = locales[0].value
-    localCompany.currency_code = currencies[0].value
   } finally {
     localeLoading.value = false
     currencyLoading.value = false
@@ -553,21 +539,22 @@ function applyCountryDerivedLocaleAndCurrency (iso2) {
 
 watch(
   () => currentCountry.value?.iso2,
-  (iso2) => {
+  (iso2, prevIso2) => {
+    // se mudou de país (incluindo primeira carga), limpa os valores
+    if (iso2 !== prevIso2) {
+      localCompany.locale = null
+      localCompany.currency_code = null
+    }
+
     if (!iso2) {
-      // limpa e deixa fallback leve
-      const locales = [{ value: 'en-US', label: 'English (United States) — en-US' }]
-      const currencies = buildCurrencyOptionsForCountry(null)
-
-      allLocales.value = locales
-      localeOptions.value = locales
-      allCurrencies.value = currencies
-      currencyOptions.value = currencies
-
-      if (!localCompany.locale) localCompany.locale = locales[0].value
-      if (!localCompany.currency_code) localCompany.currency_code = currencies[0].value
+      // país vazio -> limpa opções também
+      allLocales.value = []
+      localeOptions.value = []
+      allCurrencies.value = []
+      currencyOptions.value = []
       return
     }
+
     applyCountryDerivedLocaleAndCurrency(iso2)
   },
   { immediate: true }
