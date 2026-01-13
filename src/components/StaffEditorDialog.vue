@@ -152,6 +152,60 @@
                     />
                   </div>
 
+                  <!-- Replicar horários (popup) -->
+                  <div 
+                    class="row justify-end q-mb-sm"
+                    v-if="!local.schedule[d.key].closed"
+                  >
+                    <q-btn
+                      flat
+                      dense
+                      size="sm"
+                      icon="content_copy"
+                      label="Replicar"
+                    >
+                      <q-menu
+                        anchor="bottom right"
+                        self="top right"
+                        :offset="[0, 8]"
+                        max-width="200px"
+                        class="q-pa-sm"
+                      >
+                        <div class="text-subtitle2 text-weight-medium q-mb-sm">
+                          Replicar para...
+                        </div>
+
+                        <q-option-group
+                          v-model="replicateTargets[d.key]"
+                          type="checkbox"
+                          :options="replicateOptions(d.key)"
+                          dense
+                          class="replicate-options"
+                        />
+
+                        <q-separator class="q-my-sm" />
+
+                        <div class="row justify-end q-gutter-sm">
+                          <q-btn
+                            flat
+                            size="sm"
+                            label="Limpar"
+                            @click="replicateTargets[d.key] = []"
+                          />
+                          <q-btn
+                            color="deep-purple-6"
+                            size="sm"
+                            icon="content_copy"
+                            :disable="!replicateTargets[d.key]?.length"
+                            label="Aplicar"
+                            v-close-popup
+                            @click="applyReplicate(d.key)"
+                          />
+                        </div>
+                      </q-menu>
+                    </q-btn>
+                  </div>
+
                   <!-- Intervalos -->
                   <div
                     v-if="!local.schedule[d.key].closed"
@@ -222,6 +276,9 @@
                 </li>
                 <li>
                   Use o toggle para marcar o dia como <b>Fechado</b>.
+                </li>
+                <li>
+                  Use <b>Replicar para...</b> para copiar o horário de um dia para outros dias.
                 </li>
               </ul>
             </q-banner>
@@ -412,6 +469,65 @@ function removeInterval (dayKey, idx) {
   if (arr.length > 1) arr.splice(idx, 1)
 }
 
+// ---- replicação de horários ----------------------------------
+
+const replicateTargets = reactive({
+  mon: [],
+  tue: [],
+  wed: [],
+  thu: [],
+  fri: [],
+  sat: [],
+  sun: []
+})
+
+function dayLabelByKey (key) {
+  return days.find(d => d.key === key)?.label ?? key
+}
+
+function replicateOptions (fromDayKey) {
+  return days
+    .filter(d => d.key !== fromDayKey)
+    .map(d => ({ label: d.label, value: d.key }))
+}
+
+function cloneDaySchedule (day) {
+  return {
+    closed: !!day?.closed,
+    intervals: Array.isArray(day?.intervals)
+      ? day.intervals.map(it => ({ start: it.start ?? null, end: it.end ?? null }))
+      : []
+  }
+}
+
+function applyReplicate (fromDayKey) {
+  const targets = replicateTargets[fromDayKey] || []
+  if (!targets.length) return
+
+  // copia do dia origem
+  const source = cloneDaySchedule(local.schedule[fromDayKey])
+
+  for (const dayKey of targets) {
+    // garante estrutura do destino
+    if (!local.schedule[dayKey]) {
+      local.schedule[dayKey] = { closed: true, intervals: [] }
+    }
+
+    local.schedule[dayKey].closed = source.closed
+    local.schedule[dayKey].intervals = source.intervals.map(it => ({ ...it }))
+  }
+
+  $q.notify({
+    type: 'positive',
+    message: `Horário de ${dayLabelByKey(fromDayKey)} replicado para: ${targets
+      .map(dayLabelByKey)
+      .join(', ')}.`
+  })
+
+  // limpa seleção depois de aplicar
+  replicateTargets[fromDayKey] = []
+}
+
 function validateSchedule () {
   for (const d of days) {
     const day = local.schedule[d.key]
@@ -467,5 +583,10 @@ function onSubmit () {
   .editor-card {
     min-width: auto;
   }
+}
+.replicate-options :deep(.q-option-group) {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 </style>
