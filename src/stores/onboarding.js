@@ -23,6 +23,8 @@ export const useOnboardingStore = defineStore('onboarding', {
       link_whatsapp: '',
       tenant_id: null,
       country_id: null,
+      locale: null,
+      currency_code: null,
       status: 'active'
     },
     plan: null,
@@ -59,6 +61,10 @@ export const useOnboardingStore = defineStore('onboarding', {
         link_facebook: '',
         link_whatsapp: '',
         tenant_id: null,
+        country_id: null,
+        locale: null,
+        currency_code: null,
+
         status: 'active'
       }
       this.plan = null
@@ -90,9 +96,9 @@ export const useOnboardingStore = defineStore('onboarding', {
           console.error(e)
         }
       }
+      if (typeof this.company.locale === 'undefined') this.company.locale = null
+      if (typeof this.company.currency_code === 'undefined') this.company.currency_code = null
 
-      // Se depois de carregar a sessão ainda não tiver "empresa de verdade",
-      // busca no backend para hidratar this.company
       const hasMinimalCompany =
         !!this.company.id && !!this.company.document_number
 
@@ -128,7 +134,7 @@ export const useOnboardingStore = defineStore('onboarding', {
       this.loading = true
       try {
         const payload = {
-          company: this.company, // contém o id usado como group_id no back
+          company: this.company,
           plan: { id: this.plan.id, unique_key: this.plan.unique_key },
           payment: this.payment
         }
@@ -162,6 +168,11 @@ export const useOnboardingStore = defineStore('onboarding', {
             ...this.company,
             ...companyFromApi
           }
+
+          // ✅ garante que não fique undefined
+          if (typeof this.company.locale === 'undefined') this.company.locale = null
+          if (typeof this.company.currency_code === 'undefined') this.company.currency_code = null
+
           this.saveToSession()
         }
 
@@ -183,6 +194,11 @@ export const useOnboardingStore = defineStore('onboarding', {
             ...this.company,
             ...data.company
           }
+
+          // ✅ garante que não fique undefined
+          if (typeof this.company.locale === 'undefined') this.company.locale = null
+          if (typeof this.company.currency_code === 'undefined') this.company.currency_code = null
+
           this.saveToSession()
           return { ok: true, data }
         }
@@ -190,10 +206,8 @@ export const useOnboardingStore = defineStore('onboarding', {
         return { ok: false }
       } catch (err) {
         console.error('Erro ao carregar empresa do backend', err)
-        // sem Notify aqui pra não encher o usuário de erro em background
         return { ok: false, error: err }
       }
     }
-
   }
 })
