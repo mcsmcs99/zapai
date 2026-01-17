@@ -5,10 +5,18 @@ import { Notify } from 'quasar'
 import { useAuthStore } from 'src/stores/auth'
 
 const KEY = 'staff_state'
+const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 
 function createDefaultSchedule () {
-  const baseOpen = { closed: false, intervals: [{ start: '08:30', end: '17:30' }] }
-  const baseSat = { closed: false, intervals: [{ start: '08:30', end: '15:00' }] }
+  // agora cada intervalo tem unit_id (null por padrão)
+  const baseOpen = {
+    closed: false,
+    intervals: [{ start: '08:30', end: '17:30', unit_id: null }]
+  }
+  const baseSat = {
+    closed: false,
+    intervals: [{ start: '08:30', end: '15:00', unit_id: null }]
+  }
   const baseClosed = { closed: true, intervals: [] }
 
   return {
@@ -20,6 +28,70 @@ function createDefaultSchedule () {
     sat: { ...baseSat },
     sun: { ...baseClosed }
   }
+}
+
+/**
+ * Compat/normalização do schedule:
+ * - suporta formato antigo (string "08:30-17:30, 18:00-20:00" ou "Fechado")
+ * - suporta objeto novo { closed, intervals[] }
+ * - garante intervalos com { start, end, unit_id }
+ */
+function normalizeSchedule (rawSchedule) {
+  const src = rawSchedule || {}
+  const result = {}
+
+  for (const key of DAY_KEYS) {
+    const v = src[key]
+
+    // formato novo (objeto)
+    if (v && typeof v === 'object' && 'closed' in v && Array.isArray(v.intervals)) {
+      const intervals = v.intervals
+        .map(it => ({
+          start: it?.start ?? null,
+          end: it?.end ?? null,
+          unit_id: it?.unit_id != null ? Number(it.unit_id) : null
+        }))
+        // remove intervalos totalmente vazios (opcional, mas ajuda)
+        .filter(it => it.start || it.end || it.unit_id)
+
+      result[key] = {
+        closed: !!v.closed,
+        intervals: intervals
+      }
+      continue
+    }
+
+    // formato antigo (string)
+    if (typeof v === 'string') {
+      const trimmed = v.trim()
+
+      if (!trimmed || trimmed.toLowerCase() === 'fechado') {
+        result[key] = { closed: true, intervals: [] }
+        continue
+      }
+
+      const intervals = trimmed
+        .split(',')
+        .map(s => s.trim())
+        .map(seg => {
+          const [start, end] = seg.split('-').map(t => t.trim())
+          if (!start || !end) return null
+          return { start, end, unit_id: null }
+        })
+        .filter(Boolean)
+
+      result[key] = {
+        closed: intervals.length === 0,
+        intervals: intervals.length ? intervals : [{ start: null, end: null, unit_id: null }]
+      }
+      continue
+    }
+
+    // qualquer outro caso: garante estrutura
+    result[key] = { closed: true, intervals: [] }
+  }
+
+  return result
 }
 
 function parseIds (raw) {
@@ -105,9 +177,11 @@ export const useStaffStore = defineStore('staff', {
         role: staffData.role ?? '',
         photoUrl: staffData.photoUrl ?? staffData.photo_url ?? '',
         status: staffData.status || 'active',
-        schedule: staffData.schedule || createDefaultSchedule(),
 
-        // agora vem do backend (pivot) como array
+        // 🔥 garante schedule no formato novo + unit_id por intervalo
+        schedule: normalizeSchedule(staffData.schedule) || createDefaultSchedule(),
+
+        // pivot como array
         serviceIds: uniqIds(staffData.serviceIds ?? staffData.service_ids)
       }
       this.saveToSession()
@@ -194,6 +268,9 @@ export const useStaffStore = defineStore('staff', {
         if (data.currentStaff) {
           this.currentStaff = { ...this.currentStaff, ...data.currentStaff }
           this.currentStaff.serviceIds = uniqIds(this.currentStaff.serviceIds)
+
+          // 🔥 garante schedule ok ao recuperar sessão
+          this.currentStaff.schedule = normalizeSchedule(this.currentStaff.schedule) || createDefaultSchedule()
         }
       } catch (e) {
         console.error('Erro ao carregar staff_state da sessão', e)
@@ -226,6 +303,9 @@ export const useStaffStore = defineStore('staff', {
         out.serviceIds = uniqIds(out.serviceIds)
       }
 
+      // 🔥 normalize schedule sempre antes de enviar
+      out.schedule = normalizeSchedule(out.schedule)
+
       return out
     },
 
@@ -253,11 +333,11 @@ export const useStaffStore = defineStore('staff', {
 
         const { data } = await api.get('/tenant/staff', { params: query })
 
-        // normaliza serviceIds vindo do backend
         this.staff = (data.data || []).map(s => ({
           ...s,
           photoUrl: s.photoUrl ?? s.photo_url ?? '',
-          serviceIds: uniqIds(s.serviceIds ?? s.service_ids)
+          serviceIds: uniqIds(s.serviceIds ?? s.service_ids),
+          schedule: normalizeSchedule(s.schedule)
         }))
 
         if (data.meta) {
@@ -296,7 +376,8 @@ export const useStaffStore = defineStore('staff', {
         const normalized = {
           ...data,
           photoUrl: data.photoUrl ?? data.photo_url ?? '',
-          serviceIds: uniqIds(data.serviceIds ?? data.service_ids)
+          serviceIds: uniqIds(data.serviceIds ?? data.service_ids),
+          schedule: normalizeSchedule(data.schedule)
         }
 
         this.currentStaff = { ...this.currentStaff, ...normalized }
@@ -332,7 +413,7 @@ export const useStaffStore = defineStore('staff', {
           return { ok: false, error: msg }
         }
 
-        // IMPORTANT: manda serviceIds como array (pivot)
+        // IMPORTANT: manda serviceIds como array e schedule normalizado com unit_id
         const payload = this.normalizeStaffPayload({
           ...this.currentStaff
         })
@@ -353,7 +434,8 @@ export const useStaffStore = defineStore('staff', {
         const normalized = {
           ...data,
           photoUrl: data.photoUrl ?? data.photo_url ?? this.currentStaff.photoUrl ?? '',
-          serviceIds: uniqIds(data.serviceIds ?? data.service_ids ?? payload.serviceIds)
+          serviceIds: uniqIds(data.serviceIds ?? data.service_ids ?? payload.serviceIds),
+          schedule: normalizeSchedule(data.schedule ?? payload.schedule)
         }
 
         this.currentStaff = { ...this.currentStaff, ...normalized }

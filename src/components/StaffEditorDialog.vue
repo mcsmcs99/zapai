@@ -96,7 +96,6 @@
                 tag="label"
               >
                 <q-item-section side>
-                  <!-- importante: val numérico -->
                   <q-checkbox v-model="local.serviceIds" :val="Number(s.id)" />
                 </q-item-section>
 
@@ -153,7 +152,7 @@
                   </div>
 
                   <!-- Replicar horários (popup) -->
-                  <div 
+                  <div
                     class="row justify-end q-mb-sm"
                     v-if="!local.schedule[d.key].closed"
                   >
@@ -217,7 +216,7 @@
                       class="row q-col-gutter-sm items-center"
                     >
                       <q-select
-                        class="col-5"
+                        class="col-4"
                         v-model="interval.start"
                         :options="timeOptions"
                         label="Início"
@@ -228,7 +227,7 @@
                       />
 
                       <q-select
-                        class="col-5"
+                        class="col-4"
                         v-model="interval.end"
                         :options="timeOptions"
                         label="Fim"
@@ -238,7 +237,18 @@
                         map-options
                       />
 
-                      <div class="col-2 flex flex-center">
+                      <q-select
+                        class="col-3"
+                        v-model="interval.unit_id"
+                        :options="unitOptions"
+                        label="Unidade"
+                        dense
+                        outlined
+                        emit-value
+                        map-options
+                      />
+
+                      <div class="col-1 flex flex-center">
                         <q-btn
                           icon="delete"
                           flat
@@ -271,8 +281,11 @@
               <ul class="q-pl-md q-mb-none">
                 <li>Use os seletores para escolher os horários de início e fim.</li>
                 <li>
+                  Em cada intervalo, selecione a <b>Unidade</b> onde o colaborador estará.
+                </li>
+                <li>
                   Clique em <b>Adicionar intervalo</b> para configurar horário de
-                  almoço ou turnos diferentes.
+                  almoço ou turnos diferentes (manhã em uma unidade e tarde em outra).
                 </li>
                 <li>
                   Use o toggle para marcar o dia como <b>Fechado</b>.
@@ -317,6 +330,7 @@ function uniqIds (raw) {
 
 /**
  * Converte qualquer formato de schedule (string antiga ou objeto novo)
+ * Agora suporta unit_id por intervalo.
  */
 function normalizeSchedule (rawSchedule = {}) {
   const result = {}
@@ -324,17 +338,20 @@ function normalizeSchedule (rawSchedule = {}) {
   for (const key of DAY_KEYS) {
     const v = rawSchedule[key]
 
+    // formato novo (objeto)
     if (v && typeof v === 'object' && 'closed' in v && Array.isArray(v.intervals)) {
       result[key] = {
         closed: !!v.closed,
         intervals: v.intervals.map(it => ({
           start: it.start ?? null,
-          end: it.end ?? null
+          end: it.end ?? null,
+          unit_id: it.unit_id != null ? Number(it.unit_id) : null
         }))
       }
       continue
     }
 
+    // formato antigo (string)
     if (typeof v === 'string') {
       const trimmed = v.trim()
 
@@ -349,13 +366,15 @@ function normalizeSchedule (rawSchedule = {}) {
         .map(seg => {
           const [start, end] = seg.split('-').map(t => t.trim())
           if (!start || !end) return null
-          return { start, end }
+          return { start, end, unit_id: null }
         })
         .filter(Boolean)
 
       result[key] = {
         closed: intervals.length === 0,
-        intervals: intervals.length ? intervals : [{ start: null, end: null }]
+        intervals: intervals.length
+          ? intervals
+          : [{ start: null, end: null, unit_id: null }]
       }
       continue
     }
@@ -416,6 +435,10 @@ const props = defineProps({
   services: {
     type: Array,
     default: () => []
+  },
+  units: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -439,6 +462,12 @@ const days = [
   { key: 'sun', label: 'Domingo' }
 ]
 
+const unitOptions = computed(() =>
+  (props.units || [])
+    .filter(u => u.is_active === true)
+    .map(u => ({ label: u.name, value: Number(u.id) }))
+)
+
 const timeOptions = computed(() => {
   const out = []
   const STEP = 15
@@ -461,7 +490,13 @@ async function focusWork () {
 defineExpose({ focusWork })
 
 function addInterval (dayKey) {
-  local.schedule[dayKey].intervals.push({ start: null, end: null })
+  const intervals = local.schedule[dayKey].intervals
+  const last = intervals[intervals.length - 1]
+  intervals.push({
+    start: null,
+    end: null,
+    unit_id: last?.unit_id ?? null
+  })
 }
 
 function removeInterval (dayKey, idx) {
@@ -495,7 +530,11 @@ function cloneDaySchedule (day) {
   return {
     closed: !!day?.closed,
     intervals: Array.isArray(day?.intervals)
-      ? day.intervals.map(it => ({ start: it.start ?? null, end: it.end ?? null }))
+      ? day.intervals.map(it => ({
+          start: it.start ?? null,
+          end: it.end ?? null,
+          unit_id: it.unit_id != null ? Number(it.unit_id) : null
+        }))
       : []
   }
 }
@@ -504,11 +543,9 @@ function applyReplicate (fromDayKey) {
   const targets = replicateTargets[fromDayKey] || []
   if (!targets.length) return
 
-  // copia do dia origem
   const source = cloneDaySchedule(local.schedule[fromDayKey])
 
   for (const dayKey of targets) {
-    // garante estrutura do destino
     if (!local.schedule[dayKey]) {
       local.schedule[dayKey] = { closed: true, intervals: [] }
     }
@@ -524,22 +561,36 @@ function applyReplicate (fromDayKey) {
       .join(', ')}.`
   })
 
-  // limpa seleção depois de aplicar
   replicateTargets[fromDayKey] = []
 }
 
 function validateSchedule () {
   for (const d of days) {
     const day = local.schedule[d.key]
+    if (!day) continue
+
+    // se estiver fechado, ignora
     if (day.closed) continue
 
-    const intervals = [...day.intervals].sort((a, b) =>
+    // dia aberto precisa ter pelo menos 1 intervalo
+    const rawIntervals = Array.isArray(day.intervals) ? day.intervals : []
+    if (!rawIntervals.length) {
+      $q.notify({
+        type: 'negative',
+        message: `Adicione ao menos um intervalo em ${d.label}.`
+      })
+      return false
+    }
+
+    // ordena pra validar sobreposição
+    const intervals = [...rawIntervals].sort((a, b) =>
       (a.start || '').localeCompare(b.start || '')
     )
 
     for (let i = 0; i < intervals.length; i++) {
-      const { start, end } = intervals[i]
+      const { start, end, unit_id } = intervals[i]
 
+      // valida inicio/fim
       if (!start || !end || start >= end) {
         $q.notify({
           type: 'negative',
@@ -548,6 +599,16 @@ function validateSchedule () {
         return false
       }
 
+      const unitIdNum = Number(unit_id)
+      if (!Number.isFinite(unitIdNum) || unitIdNum <= 0) {
+        $q.notify({
+          type: 'negative',
+          message: `Selecione a unidade em ${d.label} (${start} - ${end}).`
+        })
+        return false
+      }
+
+      // valida sobreposição
       if (i > 0) {
         const prev = intervals[i - 1]
         if (start < prev.end) {
@@ -560,6 +621,7 @@ function validateSchedule () {
       }
     }
   }
+
   return true
 }
 

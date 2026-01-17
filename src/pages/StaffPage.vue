@@ -146,24 +146,33 @@
       :mode="editor.mode"
       :value="staffStore.currentStaff"
       :services="servicesStore.services"
+      :units="units"
       @save="saveStaff"
     />
   </q-page>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import StaffEditorDialog from 'components/StaffEditorDialog.vue'
 import { useStaffStore } from 'src/stores/tenant/staff'
 import { useServicesStore } from 'src/stores/tenant/services'
+import { useUnitsStore } from 'src/stores/tenant/units'
 
 defineOptions({ name: 'StaffPage' })
 
 const staffStore = useStaffStore()
 const servicesStore = useServicesStore()
+const unitsStore = useUnitsStore()
 
 const { staff: staffList } = storeToRefs(staffStore)
+const { units: unitsRef } = storeToRefs(unitsStore)
+
+/* Unidades disponíveis = units ativas do tenant */
+const units = computed(() =>
+  (unitsRef.value || []).filter(u => u.is_active === true)
+)
 
 /* ------- helpers ------- */
 const initials = n =>
@@ -258,10 +267,12 @@ async function toggleActive (p) {
 onMounted(async () => {
   staffStore.loadFromSession()
   servicesStore.loadFromSession?.()
+  unitsStore.loadFromSession?.()
 
   await Promise.all([
     staffStore.fetchStaff(),
-    servicesStore.fetchServices()
+    servicesStore.fetchServices(),
+    unitsStore.fetchUnits?.()
   ])
 })
 </script>
