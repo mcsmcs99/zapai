@@ -54,10 +54,17 @@ export const useAppointmentsStore = defineStore('appointments', {
       status: 'confirmed',
       price: 0,
 
+      unitId: null, // ✅ NOVO (unidade do agendamento)
       serviceId: null,
       collaboratorId: null,
 
-      customerName: ''
+      customerName: '',
+
+      // compat (mantém pra evitar quebra em lugares antigos)
+      unit_id: null,
+      service_id: null,
+      collaborator_id: null,
+      customer_name: ''
     }
   }),
 
@@ -134,6 +141,9 @@ export const useAppointmentsStore = defineStore('appointments', {
     /* ---------------- normalização ---------------- */
 
     normalizeAppointment (row = {}) {
+      const unitId =
+        row.unitId ?? row.unit_id ?? row.unit?.id ?? null
+
       const serviceId =
         row.serviceId ?? row.service_id ?? row.service?.id ?? null
 
@@ -157,11 +167,13 @@ export const useAppointmentsStore = defineStore('appointments', {
         status: row.status ?? 'pending',
         price: Number(row.price ?? 0),
 
+        unitId,
         serviceId,
         collaboratorId,
         customerName,
 
         // compat
+        unit_id: unitId,
         service_id: serviceId,
         collaborator_id: collaboratorId,
         customer_name: customerName
@@ -172,6 +184,36 @@ export const useAppointmentsStore = defineStore('appointments', {
 
     setCurrentAppointmentField (key, val) {
       if (!(key in this.currentAppointment)) return
+
+      // ✅ se trocar unidade, limpa dependências (service/collab/data/slots)
+      if (key === 'unitId') {
+        const nextUnitId = val != null ? Number(val) : null
+        const currentUnitId =
+          this.currentAppointment.unitId != null
+            ? Number(this.currentAppointment.unitId)
+            : null
+
+        if (nextUnitId !== currentUnitId) {
+          this.currentAppointment.unitId = nextUnitId
+
+          this.currentAppointment.serviceId = null
+          this.currentAppointment.collaboratorId = null
+          this.currentAppointment.date = ''
+          this.currentAppointment.start = ''
+          this.currentAppointment.end = ''
+
+          // compat
+          this.currentAppointment.unit_id = this.currentAppointment.unitId
+          this.currentAppointment.service_id = this.currentAppointment.serviceId
+          this.currentAppointment.collaborator_id = this.currentAppointment.collaboratorId
+
+          // se o editor estiver aberto, evita usar conflitos antigos
+          this.resetConflicts()
+
+          this.saveToSession()
+          return
+        }
+      }
 
       // ✅ se trocar service, limpa collaborator
       if (key === 'serviceId') {
@@ -189,6 +231,7 @@ export const useAppointmentsStore = defineStore('appointments', {
           this.currentAppointment.service_id = this.currentAppointment.serviceId
           this.currentAppointment.collaborator_id = this.currentAppointment.collaboratorId
 
+          this.resetConflicts()
           this.saveToSession()
           return
         }
@@ -197,6 +240,7 @@ export const useAppointmentsStore = defineStore('appointments', {
       this.currentAppointment[key] = val
 
       // compat
+      if (key === 'unitId') this.currentAppointment.unit_id = val
       if (key === 'serviceId') this.currentAppointment.service_id = val
       if (key === 'collaboratorId') this.currentAppointment.collaborator_id = val
       if (key === 'customerName') this.currentAppointment.customer_name = val
@@ -237,6 +281,7 @@ export const useAppointmentsStore = defineStore('appointments', {
       }
 
       // compat
+      this.currentAppointment.unit_id = this.currentAppointment.unitId
       this.currentAppointment.service_id = this.currentAppointment.serviceId
       this.currentAppointment.collaborator_id = this.currentAppointment.collaboratorId
       this.currentAppointment.customer_name = this.currentAppointment.customerName
@@ -255,9 +300,18 @@ export const useAppointmentsStore = defineStore('appointments', {
         end: '',
         status: 'confirmed',
         price: 0,
+
+        unitId: null,
         serviceId: null,
         collaboratorId: null,
-        customerName: ''
+
+        customerName: '',
+
+        // compat
+        unit_id: null,
+        service_id: null,
+        collaborator_id: null,
+        customer_name: ''
       }
       this.saveToSession()
     },
@@ -370,10 +424,6 @@ export const useAppointmentsStore = defineStore('appointments', {
       } catch (err) {
         console.error('Erro ao buscar conflitos do dia:', err)
         this.resetConflicts()
-
-        // sem notify aqui pra não poluir UX do editor (mas se quiser, pode ligar)
-        // Notify.create({ type: 'negative', message: 'Erro ao carregar conflitos do dia.' })
-
         return { ok: false, error: 'Erro ao carregar conflitos do dia.' }
       } finally {
         this.loadingConflicts = false
@@ -490,6 +540,11 @@ export const useAppointmentsStore = defineStore('appointments', {
           return { ok: false, error: msg }
         }
 
+        const unitIdRaw =
+          this.currentAppointment.unitId ??
+          this.currentAppointment.unit_id ??
+          null
+
         const serviceIdRaw =
           this.currentAppointment.serviceId ??
           this.currentAppointment.service_id ??
@@ -500,8 +555,15 @@ export const useAppointmentsStore = defineStore('appointments', {
           this.currentAppointment.collaborator_id ??
           null
 
+        const unitId = Number(unitIdRaw)
         const serviceId = Number(serviceIdRaw)
         const collaboratorId = Number(collaboratorIdRaw)
+
+        if (!Number.isFinite(unitId) || unitId <= 0) {
+          const msg = 'unit_id inválido ao salvar agendamento.'
+          Notify.create({ type: 'negative', message: msg })
+          return { ok: false, error: msg }
+        }
 
         if (!Number.isFinite(serviceId) || serviceId <= 0) {
           const msg = 'service_id inválido ao salvar agendamento.'
@@ -523,6 +585,7 @@ export const useAppointmentsStore = defineStore('appointments', {
           status: this.currentAppointment.status,
           price: this.currentAppointment.price,
 
+          unit_id: unitId, // ✅ NOVO
           service_id: serviceId,
           collaborator_id: collaboratorId,
 
@@ -619,13 +682,27 @@ export const useAppointmentsStore = defineStore('appointments', {
 
       const normalizedPatch = { ...patch }
 
+      if (typeof patch.unit_id !== 'undefined') normalizedPatch.unitId = patch.unit_id
       if (typeof patch.service_id !== 'undefined') normalizedPatch.serviceId = patch.service_id
       if (typeof patch.collaborator_id !== 'undefined') normalizedPatch.collaboratorId = patch.collaborator_id
       if (typeof patch.customer_name !== 'undefined') normalizedPatch.customerName = patch.customer_name
 
+      delete normalizedPatch.unit_id
       delete normalizedPatch.service_id
       delete normalizedPatch.collaborator_id
       delete normalizedPatch.customer_name
+
+      const nextUnitId =
+        typeof normalizedPatch.unitId !== 'undefined'
+          ? (normalizedPatch.unitId != null ? Number(normalizedPatch.unitId) : null)
+          : (current.unitId != null ? Number(current.unitId) : null)
+
+      const currUnitId =
+        current.unitId != null ? Number(current.unitId) : null
+
+      const unitChanged =
+        typeof normalizedPatch.unitId !== 'undefined' &&
+        nextUnitId !== currUnitId
 
       const nextServiceId =
         typeof normalizedPatch.serviceId !== 'undefined'
@@ -643,6 +720,16 @@ export const useAppointmentsStore = defineStore('appointments', {
         ...current,
         ...normalizedPatch,
         id,
+        ...(unitChanged
+          ? {
+              serviceId: null,
+              service_id: null,
+              collaboratorId: null,
+              collaborator_id: null,
+              start: '',
+              end: ''
+            }
+          : {}),
         ...(serviceChanged ? { collaboratorId: null, collaborator_id: null } : {})
       })
 

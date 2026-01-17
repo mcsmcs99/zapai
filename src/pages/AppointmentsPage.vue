@@ -132,6 +132,11 @@
                 </div>
 
                 <div class="row items-center q-gutter-xs q-mt-xs">
+                  <!-- Unidade (novo) -->
+                  <q-chip dense square icon="store" color="grey-2" text-color="grey-9">
+                    {{ a.unit || 'Unidade' }}
+                  </q-chip>
+
                   <q-chip dense square icon="content_cut" color="grey-2" text-color="grey-9">
                     {{ a.service }}
                   </q-chip>
@@ -208,6 +213,7 @@
       v-model="dlg.open"
       :mode="dlg.mode"
       :value="dlg.value"
+      :units="unitsForDialog"
       :services="services"
       :staff="staffForDialog"
       :appointments="appointments"
@@ -244,6 +250,7 @@ import AppointmentEditorDialog from 'components/AppointmentEditorDialog.vue'
 
 import { useServicesStore } from 'src/stores/tenant/services'
 import { useStaffStore } from 'src/stores/tenant/staff'
+import { useUnitsStore } from 'src/stores/tenant/units' // ✅ NOVO
 import { useAppointmentsStore } from 'src/stores/tenant/appointments'
 
 defineOptions({ name: 'AppointmentsPage' })
@@ -251,11 +258,24 @@ defineOptions({ name: 'AppointmentsPage' })
 /* ---------------- stores ---------------- */
 const servicesStore = useServicesStore()
 const staffStore = useStaffStore()
+const unitsStore = useUnitsStore() // ✅ NOVO
 const appointmentsStore = useAppointmentsStore()
 
 const { services } = storeToRefs(servicesStore)
 const { staff } = storeToRefs(staffStore)
+const { units } = storeToRefs(unitsStore) // ✅ NOVO
 const { appointments, meta, loadingList } = storeToRefs(appointmentsStore)
+
+/* ---------------- units helpers ---------------- */
+const unitsForDialog = computed(() =>
+  (units.value || []).filter(u => u.is_active === true)
+)
+
+const unitById = computed(() => {
+  const map = new Map()
+  for (const u of (units.value || [])) map.set(Number(u.id), u)
+  return map
+})
 
 /* ---------------- pagination (backend) ---------------- */
 const page = ref(Number(meta.value?.page || 1))
@@ -308,11 +328,6 @@ const staffByServiceId = computed(() => {
   return out
 })
 
-/**
- * staff enviado ao dialog:
- * - se está edit/view e tem service_id, manda staff já filtrado pelo serviço
- * - senão manda staff ativo inteiro (create sem serviço selecionado ainda)
- */
 const staffForDialog = computed(() => {
   const serviceId =
     dlg?.value?.service_id ??
@@ -321,7 +336,6 @@ const staffForDialog = computed(() => {
 
   if (serviceId) {
     const filtered = getStaffForService(serviceId)
-    // se não tiver vínculo ainda, cai no ativo (pra não travar a UI)
     return filtered.length ? filtered : activeStaff.value
   }
 
@@ -333,12 +347,15 @@ const appointmentsEnriched = computed(() => {
   return (appointments.value || []).map(a => {
     const serviceId = Number(a.service_id ?? a.serviceId ?? 0)
     const collabId = Number(a.collaborator_id ?? a.collaboratorId ?? 0)
+    const unitId = Number(a.unit_id ?? a.unitId ?? 0)
 
     const s = serviceById.value.get(serviceId)
     const c = staffById.value.get(collabId)
+    const u = unitById.value.get(unitId)
 
     return {
       ...a,
+      unit: u?.name || 'Unidade não encontrada',
       service: s?.title || 'Serviço não encontrado',
       collaborator: c?.name || 'Colaborador não encontrado',
       customer: a.customer_name ?? a.customerName ?? a.customer ?? ''
@@ -369,7 +386,6 @@ async function onSaveAppointment (payload) {
   }
 
   if (resp?.ok) {
-    // mantém na página atual
     await appointmentsStore.fetchAppointments({ page: meta.value?.page || 1 })
   }
 }
@@ -400,6 +416,7 @@ const isoToBR = (iso) => {
 function mapRowToDialogValue (a) {
   return {
     id: a.id,
+    unit_id: a.unit_id ?? a.unitId ?? null,              // ✅ NOVO
     service_id: a.service_id ?? a.serviceId ?? null,
     collaborator_id: a.collaborator_id ?? a.collaboratorId ?? null,
 
@@ -520,7 +537,7 @@ const filteredFlat = computed(() => {
 
   return (appointmentsEnriched.value || [])
     .filter(a => {
-      const okQ = !q || [a.customer, a.service, a.collaborator]
+      const okQ = !q || [a.customer, a.service, a.collaborator, a.unit]
         .some(t => String(t || '').toLowerCase().includes(q))
 
       const okS = f.value.status === 'all' || a.status === f.value.status
@@ -562,11 +579,15 @@ const formatGroupLabel = (iso) => fmtDateLong(iso)
 onMounted(async () => {
   servicesStore.loadFromSession()
   staffStore.loadFromSession?.()
+  unitsStore.loadFromSession?.()            // ✅ NOVO
   appointmentsStore.loadFromSession?.()
 
-  await servicesStore.fetchServices()
-  await staffStore.fetchStaff()
-  await appointmentsStore.fetchAppointments({ page: meta.value?.page || 1 })
+  await Promise.all([
+    servicesStore.fetchServices(),
+    staffStore.fetchStaff(),
+    unitsStore.fetchUnits?.(),              // ✅ NOVO
+    appointmentsStore.fetchAppointments({ page: meta.value?.page || 1 })
+  ])
 })
 </script>
 

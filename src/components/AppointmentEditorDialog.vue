@@ -18,8 +18,23 @@
       <q-form class="q-pa-md" @submit.prevent="onSubmit">
         <div class="q-pa-md rounded-borders bg-grey-1" style="border:1px solid #ECECEC">
 
+          <!-- Unidade -->
+          <q-select
+            v-model="local.unit_id"
+            :options="unitOptions"
+            emit-value
+            map-options
+            outlined
+            dense
+            clearable
+            label="Unidade *"
+            :disable="isView"
+            :rules="[v => !!v || 'Selecione uma unidade']"
+          />
+
           <!-- Serviço -->
           <q-select
+            class="q-mt-md"
             v-model="local.service_id"
             :options="serviceOptions"
             emit-value
@@ -28,7 +43,7 @@
             dense
             clearable
             label="Serviço *"
-            :disable="isView"
+            :disable="isView || !local.unit_id"
             :rules="[v => !!v || 'Selecione um serviço']"
           />
 
@@ -43,7 +58,7 @@
             dense
             clearable
             label="Colaborador *"
-            :disable="isView || !local.service_id"
+            :disable="isView || !local.unit_id || !local.service_id"
             :rules="[v => !!v || 'Selecione um colaborador']"
           />
 
@@ -58,7 +73,7 @@
             clearable
             readonly
             input-class="cursor-pointer"
-            :disable="isView || !local.service_id || !local.collaborator_id"
+            :disable="isView || !local.unit_id || !local.service_id || !local.collaborator_id"
             :rules="[
               v => !!parseBR(v) || 'Informe uma data válida',
               v => {
@@ -90,7 +105,7 @@
               rounded
               class="bg-grey-2 text-grey-9"
             >
-              Selecione <b>serviço</b>, <b>colaborador</b> e <b>data</b> para ver os horários.
+              Selecione <b>unidade</b>, <b>serviço</b>, <b>colaborador</b> e <b>data</b> para ver os horários.
             </q-banner>
 
             <q-banner
@@ -106,7 +121,7 @@
               rounded
               class="bg-red-1 text-red-10"
             >
-              Nenhum horário disponível para este dia/colaborador.
+              Nenhum horário disponível para este dia/colaborador nesta unidade.
             </q-banner>
 
             <q-option-group
@@ -164,13 +179,13 @@ const props = defineProps({
   mode: { type: String, default: 'create' }, // 'create' | 'edit' | 'view'
   value: { type: Object, default: null },
 
+  units: { type: Array, default: () => [] },     // ✅ NOVO
   services: { type: Array, default: () => [] },
   staff: { type: Array, default: () => [] },
 
   // ⚠️ mantido por compat (não é mais usado pros slots, agora vem do store)
   appointments: { type: Array, default: () => [] },
 
-  // ✅ opcional (se você passar da page, ajuda, mas não é obrigatório)
   staffByServiceId: { type: Object, default: () => ({}) }
 })
 
@@ -188,6 +203,7 @@ const title = computed(() => {
 })
 
 const local = reactive({
+  unit_id: null,          // ✅ NOVO
   service_id: null,
   collaborator_id: null,
   dateBR: '',
@@ -196,6 +212,7 @@ const local = reactive({
 })
 
 function resetLocal () {
+  local.unit_id = null
   local.service_id = null
   local.collaborator_id = null
   local.dateBR = ''
@@ -204,10 +221,10 @@ function resetLocal () {
 }
 
 function fillFromValue (v) {
+  local.unit_id = v?.unit_id ?? v?.unitId ?? null
   local.service_id = v?.service_id ?? v?.serviceId ?? null
   local.collaborator_id = v?.collaborator_id ?? v?.collaboratorId ?? null
 
-  // ✅ se vier ISO, converte pra BR (evita dateBR vazio no edit)
   if (v?.date && /^\d{4}-\d{2}-\d{2}$/.test(String(v.date))) {
     const [y, m, d] = String(v.date).split('-')
     local.dateBR = `${d}/${m}/${y}`
@@ -290,19 +307,54 @@ const todayBR = () => {
   return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`
 }
 
-/* ---------------- dados derivados ---------------- */
+/* ---------------- UNITS ---------------- */
+const activeUnits = computed(() => (props.units || []).filter(u => u.is_active === true))
+const unitOptions = computed(() =>
+  activeUnits.value.map(u => ({ label: u.name, value: Number(u.id) }))
+)
+
+/* ---------------- SERVICES ---------------- */
 const activeServices = computed(() => (props.services || []).filter(s => s.status === 'active'))
-const activeStaff = computed(() => (props.staff || []).filter(s => s.status === 'active'))
+
+function getServiceUnitIds (service) {
+  const raw = service?.unitIds ?? service?.unit_ids ?? []
+  if (Array.isArray(raw)) return raw.map(Number).filter(n => Number.isFinite(n))
+  if (typeof raw === 'string') {
+    const s = raw.trim()
+    if (!s) return []
+    try {
+      const j = JSON.parse(s)
+      if (Array.isArray(j)) return j.map(Number).filter(n => Number.isFinite(n))
+    } catch (e) {console.warn(e)}
+    return s
+      .split(',')
+      .map(x => Number(String(x).trim()))
+      .filter(n => Number.isFinite(n))
+  }
+  return []
+}
+
+const servicesByUnit = computed(() => {
+  if (!local.unit_id) return []
+  const uid = Number(local.unit_id)
+  return activeServices.value.filter(s => {
+    const ids = getServiceUnitIds(s)
+    return ids.includes(uid)
+  })
+})
 
 const serviceOptions = computed(() =>
-  activeServices.value.map(s => ({ label: s.title, value: s.id }))
+  servicesByUnit.value.map(s => ({ label: s.title, value: Number(s.id) }))
 )
 
 const selectedService = computed(() => {
   const id = local.service_id
   if (!id) return null
-  return activeServices.value.find(s => Number(s.id) === Number(id)) || null
+  return servicesByUnit.value.find(s => Number(s.id) === Number(id)) || null
 })
+
+/* ---------------- STAFF ---------------- */
+const activeStaff = computed(() => (props.staff || []).filter(s => s.status === 'active'))
 
 const selectedCollaborator = computed(() => {
   const id = local.collaborator_id
@@ -312,10 +364,7 @@ const selectedCollaborator = computed(() => {
 
 function getServiceCollaboratorIds (service) {
   if (!service) return []
-  const raw =
-    service.collaboratorIds ??
-    service.collaborator_ids ??
-    []
+  const raw = service.collaboratorIds ?? service.collaborator_ids ?? []
 
   if (Array.isArray(raw)) return raw.map(Number).filter(n => Number.isFinite(n))
 
@@ -335,21 +384,53 @@ function getServiceCollaboratorIds (service) {
   return []
 }
 
-const collaboratorOptions = computed(() => {
-  if (!selectedService.value) return []
+/**
+ * ✅ Filtra colaboradores:
+ * - pelo serviço (pivot service_staff)
+ * - e também garante que ele tem ao menos 1 intervalo no schedule com unit_id da unidade selecionada
+ */
+function staffHasUnitInAnyInterval (staff, unitId) {
+  if (!staff || !unitId) return false
+  const sched = staff.schedule || {}
+  const uid = Number(unitId)
 
-  const mapped = props.staffByServiceId?.[Number(selectedService.value.id)]
-  if (Array.isArray(mapped) && mapped.length) {
-    return mapped.map(c => ({ label: c.name, value: c.id }))
+  for (const key of Object.keys(sched)) {
+    const day = sched[key]
+    if (!day || day.closed) continue
+    const intervals = Array.isArray(day.intervals) ? day.intervals : []
+    if (intervals.some(it => Number(it.unit_id) === uid)) return true
   }
+  return false
+}
+
+const collaboratorOptions = computed(() => {
+  if (!selectedService.value || !local.unit_id) return []
 
   const ids = new Set(getServiceCollaboratorIds(selectedService.value))
+  const uid = Number(local.unit_id)
+
   return activeStaff.value
     .filter(c => ids.has(Number(c.id)))
-    .map(c => ({ label: c.name, value: c.id }))
+    .filter(c => staffHasUnitInAnyInterval(c, uid))
+    .map(c => ({ label: c.name, value: Number(c.id) }))
 })
 
 /* ---------------- resets encadeados ---------------- */
+watch(
+  () => local.unit_id,
+  async (newVal, oldVal) => {
+    if (!props.modelValue) return
+    if (Number(newVal || 0) === Number(oldVal || 0)) return
+
+    local.service_id = null
+    local.collaborator_id = null
+    local.dateBR = props.mode === 'create' ? todayBR() : ''
+    local.start = ''
+
+    appointmentsStore.resetConflicts()
+  }
+)
+
 watch(
   () => local.service_id,
   async (newVal, oldVal) => {
@@ -370,7 +451,6 @@ watch(
     if (!props.modelValue) return
     if (Number(newVal || 0) === Number(oldVal || 0)) return
 
-    // colaborador muda -> data/slot precisam ser revalidos
     local.dateBR = props.mode === 'create' ? todayBR() : local.dateBR
     local.start = ''
 
@@ -386,13 +466,12 @@ watch(
     if (String(newVal || '') === String(oldVal || '')) return
 
     local.start = ''
-
     appointmentsStore.resetConflicts()
     await fetchConflictsIfReady()
   }
 )
 
-/** se o colaborador selecionado não estiver mais disponível para o serviço, limpa */
+/** se o colaborador selecionado não estiver mais disponível, limpa */
 watch(
   () => collaboratorOptions.value,
   (opts) => {
@@ -406,9 +485,12 @@ watch(
   }
 )
 
-/* ---------------- conflicts (nova rota) ---------------- */
+/* ---------------- conflicts ---------------- */
 const canShowSlots = computed(() =>
-  !!local.service_id && !!local.collaborator_id && !!toISOFromBR(local.dateBR)
+  !!local.unit_id &&
+  !!local.service_id &&
+  !!local.collaborator_id &&
+  !!toISOFromBR(local.dateBR)
 )
 
 const currentAppointmentId = computed(() => props.value?.id ?? null)
@@ -420,7 +502,6 @@ async function fetchConflictsIfReady () {
   const dateISO = toISOFromBR(local.dateBR)
   if (!dateISO) return
 
-  // ✅ NOVO: não envia serviceId (rota não filtra serviço)
   await appointmentsStore.fetchConflictsForSlot({
     date: dateISO,
     collaboratorId: Number(local.collaborator_id),
@@ -440,7 +521,7 @@ watch(
   }
 )
 
-/* ---------------- busyRanges usando conflicts do store ---------------- */
+/* ---------------- busyRanges ---------------- */
 const busyRanges = computed(() => {
   if (!canShowSlots.value) return []
 
@@ -462,7 +543,7 @@ function overlapsAnyBusy (startMin, endMin) {
   return false
 }
 
-/* ---------------- slots ---------------- */
+/* ---------------- slots (filtrado por unidade via interval.unit_id) ---------------- */
 const slotOptions = computed(() => {
   if (!canShowSlots.value) return []
   if (loadingConflicts.value) return []
@@ -480,13 +561,19 @@ const slotOptions = computed(() => {
 
   if (!day || day.closed) return []
 
+  const uid = Number(local.unit_id)
+
+  // ✅ pega só intervalos do dia na unidade selecionada
+  const intervalsForUnit = (day.intervals || []).filter(it => Number(it.unit_id) === uid)
+  if (!intervalsForUnit.length) return []
+
   const isToday = dateISO === todayISO()
   const now = new Date()
   const nowMin = now.getHours() * 60 + now.getMinutes()
 
   const slots = []
 
-  for (const it of (day.intervals || [])) {
+  for (const it of intervalsForUnit) {
     const start = toMin(it.start)
     const end = toMin(it.end)
 
@@ -495,9 +582,7 @@ const slotOptions = computed(() => {
       const e = toHHMM(t + duration)
 
       const isBusy = overlapsAnyBusy(t, t + duration)
-
       const isPastToday = isToday && t <= nowMin
-
       const disabled = isBusy || isPastToday
 
       slots.push({
@@ -526,7 +611,6 @@ const canSubmit = computed(() => {
   if (!canShowSlots.value) return false
   if (loadingConflicts.value) return false
   if (!local.start) return false
-
   if (props.mode === 'create' && !local.customer_name.trim()) return false
   return true
 })
@@ -542,10 +626,10 @@ function onSubmit () {
 
   if (!duration || duration <= 0) return
 
-  // Hard-block: se conflitar, não salva
   if (overlapsAnyBusy(startMin, endMin)) return
 
   const payload = {
+    unit_id: Number(local.unit_id),               // ✅ NOVO
     service_id: Number(local.service_id),
     collaborator_id: Number(local.collaborator_id),
     date: dateISO,
@@ -553,7 +637,6 @@ function onSubmit () {
     end: toHHMM(endMin)
   }
 
-  // create: envia customer_name e price
   if (props.mode === 'create') {
     payload.customer_name = local.customer_name.trim()
     payload.price = Number(service.price ?? 0)
