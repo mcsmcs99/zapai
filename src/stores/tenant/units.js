@@ -6,6 +6,31 @@ import { useAuthStore } from 'src/stores/auth'
 
 const KEY = 'units_state'
 
+function parseIds (raw) {
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw.map(Number).filter(n => Number.isFinite(n))
+
+  if (typeof raw === 'string') {
+    try {
+      const j = JSON.parse(raw)
+      if (Array.isArray(j)) return j.map(Number).filter(n => Number.isFinite(n))
+    } catch {
+      // ignore
+    }
+
+    return raw
+      .split(',')
+      .map(s => Number(String(s).trim()))
+      .filter(n => Number.isFinite(n))
+  }
+
+  return []
+}
+
+function uniqIds (arr) {
+  return [...new Set(parseIds(arr))]
+}
+
 function normalizeLinks (raw) {
   if (!raw) return []
   if (Array.isArray(raw)) return raw
@@ -54,8 +79,29 @@ function normalizeUnitPayload (unit = {}) {
     place_id: unit.place_id ?? unit.placeId ?? null,
 
     // links
-    unit_links: normalizeLinks(unit.unit_links ?? unit.unitLinks)
+    unit_links: normalizeLinks(unit.unit_links ?? unit.unitLinks),
+
+    // NEW: serviços disponíveis na unidade (pivot)
+    serviceIds: uniqIds(unit.serviceIds ?? unit.service_ids)
   }
+}
+
+/**
+ * Payload normalizer (manda sempre serviceIds, nunca service_ids)
+ */
+function normalizeUnitRequestPayload (payload = {}) {
+  const out = { ...payload }
+
+  if ('service_ids' in out && out.serviceIds === undefined) {
+    out.serviceIds = out.service_ids
+  }
+  if ('service_ids' in out) delete out.service_ids
+
+  if ('serviceIds' in out) {
+    out.serviceIds = uniqIds(out.serviceIds)
+  }
+
+  return out
 }
 
 export const useUnitsStore = defineStore('units', {
@@ -98,7 +144,10 @@ export const useUnitsStore = defineStore('units', {
       longitude: null,
       place_id: null,
 
-      unit_links: []
+      unit_links: [],
+
+      // NEW
+      serviceIds: []
     })
   }),
 
@@ -165,7 +214,10 @@ export const useUnitsStore = defineStore('units', {
         longitude: null,
         place_id: null,
 
-        unit_links: []
+        unit_links: [],
+
+        // NEW
+        serviceIds: []
       })
       this.saveToSession()
     },
@@ -229,6 +281,9 @@ export const useUnitsStore = defineStore('units', {
             ...this.currentUnit,
             ...data.currentUnit
           })
+
+          // garante normalização
+          this.currentUnit.serviceIds = uniqIds(this.currentUnit.serviceIds)
         }
       } catch (e) {
         console.error('Erro ao carregar units_state da sessão', e)
@@ -374,14 +429,16 @@ export const useUnitsStore = defineStore('units', {
           else seen.add(l.type)
         }
 
+        // NEW: garante serviceIds no formato certo
+        const basePayload = normalizeUnitRequestPayload({
+          ...this.currentUnit
+        })
+
         const payload = {
-          ...this.currentUnit,
+          ...basePayload,
 
           // garante naming consistente pro backend
-          unit_links: links,
-
-          user_id: userId,
-          group_id: groupId
+          unit_links: links
         }
 
         let resp
@@ -454,7 +511,10 @@ export const useUnitsStore = defineStore('units', {
           return { ok: false, error: msg }
         }
 
-        const payload = { ...patch }
+        let payload = { ...patch }
+
+        // NEW: normaliza serviceIds no patch também
+        payload = normalizeUnitRequestPayload(payload)
 
         // se vier links no patch, normaliza
         if ('unit_links' in payload || 'unitLinks' in payload) {

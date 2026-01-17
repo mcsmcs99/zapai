@@ -261,8 +261,55 @@
             </div>
           </div>
 
+          <!-- NEW: Serviços disponíveis na unidade -->
+          <div class="q-mt-xl">
+            <div class="text-subtitle1 text-weight-bold q-mb-sm">
+              Serviços disponíveis nesta unidade
+            </div>
+
+            <q-banner
+              v-if="!services || services.length === 0"
+              rounded
+              class="bg-grey-2 text-grey-9"
+            >
+              Nenhum serviço cadastrado.
+              <div class="q-mt-xs text-caption">
+                Cadastre um serviço no menu <b>Serviços &gt; Novo serviço</b>.
+              </div>
+            </q-banner>
+
+            <q-list
+              v-else
+              bordered
+              class="rounded-borders"
+              style="max-height: 260px; overflow:auto"
+            >
+              <q-item
+                v-for="s in services"
+                :key="s.id"
+                tag="label"
+              >
+                <q-item-section side>
+                  <q-checkbox
+                    v-model="local.serviceIds"
+                    :val="Number(s.id)"
+                  />
+                </q-item-section>
+
+                <q-item-section>
+                  <q-item-label class="text-weight-medium">
+                    {{ s.title }}
+                  </q-item-label>
+                  <q-item-label caption>
+                    {{ s.duration }} min • {{ currency(s.price) }}
+                  </q-item-label>
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </div>
+
           <!-- Links (unit_links) -->
-          <div class="q-mt-lg">
+          <div class="q-mt-xl">
             <div class="row items-center q-mb-sm">
               <div class="text-subtitle1 text-weight-bold">Links</div>
               <q-space />
@@ -389,10 +436,23 @@ import { useTimezones } from 'src/composables/useTimezones'
 
 defineOptions({ name: 'UnitEditorDialog' })
 
+function parseIds (raw) {
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw.map(Number).filter(Number.isFinite)
+  return []
+}
+function uniqIds (raw) {
+  return [...new Set(parseIds(raw))]
+}
+
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   mode: { type: String, default: 'create' },
   company: { type: Object, required: true },
+
+  // NEW: lista de serviços disponíveis para seleção
+  services: { type: Array, default: () => [] },
+
   value: {
     type: Object,
     default: () => ({
@@ -411,7 +471,10 @@ const props = defineProps({
       latitude: null,
       longitude: null,
       place_id: null,
-      unit_links: []
+      unit_links: [],
+
+      // NEW: pivot unit_service
+      serviceIds: []
     })
   }
 })
@@ -438,18 +501,38 @@ const LIMITS = {
   unit_link: {
     type: 40,
     provider: 40,
-    // url agora é TEXT no backend, mas colocamos um teto pra UX/segurança
     url: 2048,
     label: 80
   }
 }
 
-const local = reactive(JSON.parse(JSON.stringify(props.value)))
+function normalizeUnit (v = {}) {
+  const out = JSON.parse(JSON.stringify(v || {}))
+
+  // compat is_active
+  if (out.is_active === undefined && out.status !== undefined) {
+    out.is_active = out.status === 'active'
+  }
+
+  // NEW: compat service_ids
+  if (out.serviceIds === undefined && out.service_ids !== undefined) {
+    out.serviceIds = out.service_ids
+  }
+  delete out.service_ids
+
+  out.serviceIds = uniqIds(out.serviceIds)
+
+  if (!Array.isArray(out.unit_links)) out.unit_links = []
+
+  return out
+}
+
+const local = reactive(normalizeUnit(props.value))
 
 watch(
   () => props.value,
   v => {
-    Object.assign(local, JSON.parse(JSON.stringify(v || {})))
+    Object.assign(local, normalizeUnit(v))
     addressNumber.value = extractNumberFromLine1(local.address_line1)
   },
   { deep: true }
@@ -460,7 +543,7 @@ watch(
  */
 const rules = {
   required: v => (!!v || v === 0) || 'Campo obrigatório',
-  email: v => !v || /.+@.+\..+/.test(v) || 'E-mail inválido', // permite vazio
+  email: v => !v || /.+@.+\..+/.test(v) || 'E-mail inválido',
   max: (n) => (v) => !v || String(v).length <= n || `Máximo de ${n} caracteres`
 }
 
@@ -477,23 +560,18 @@ const currentCountry = computed(() => {
   return allCountries.value.find(c => c.id === companyCountryId.value) || null
 })
 
-// aqui a gente usa sua função existente (mesma ideia do CompanyDialog)
 const countryCode = computed(() => {
-  // precisa ser alpha2 (BR/US/PT...). Se não achar, cai no BR.
   return getRegionFromCountryName(currentCountry.value?.name) || 'BR'
 })
 
 const { mask: phoneMask } = useMask('phone', countryCode)
 
 /**
- * -------- Timezones (via useTimezones) --------
+ * -------- Timezones --------
  */
 const tzLoading = ref(false)
-
-// useTimezones devolve um ref `options`
 const { options: tzOptions } = useTimezones(countryCode)
 
-// base + lista usada no select
 const _tzBase = ref([])
 const timezoneOptions = ref([])
 
@@ -503,7 +581,6 @@ watch(
     timezoneOptions.value = Array.isArray(list) ? list : []
     _tzBase.value = timezoneOptions.value.slice()
 
-    // se o timezone atual não existir na lista, limpa
     if (local.timezone && !_tzBase.value.some(t => t.value === local.timezone)) {
       local.timezone = null
     }
@@ -511,7 +588,6 @@ watch(
   { immediate: true, deep: true }
 )
 
-// como agora as opções são síncronas (vêm da lib), loading fica falso
 watch(
   () => countryCode.value,
   () => { tzLoading.value = false },
@@ -521,7 +597,6 @@ watch(
 function filterTimezone (val, update) {
   update(() => {
     const base = _tzBase.value
-
     if (!val) {
       timezoneOptions.value = base
       return
@@ -535,7 +610,6 @@ function filterTimezone (val, update) {
 }
 
 onMounted(async () => {
-  // garante países carregados
   if (!countriesStore.items.length) {
     await countriesStore.fetchCountries({
       status: 'active',
@@ -581,7 +655,6 @@ function buildLine1 (street, number) {
   if (!number) return streetNoNum
   if (!streetNoNum) return `${number}`
 
-  // respeita limite do model (255)
   const combined = `${streetNoNum}, ${String(number).trim()}`
   return combined.slice(0, LIMITS.unit.address_line1)
 }
@@ -637,9 +710,18 @@ function normalizePrimaryPerType () {
   }
 }
 
+const currency = (v) =>
+  new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(Number(v || 0))
+
 function onSubmit () {
   normalizePrimaryPerType()
   local.address_line1 = buildLine1(local.address_line1, addressNumber.value)
+
+  // garante ids numéricos/únicos
+  local.serviceIds = uniqIds(local.serviceIds)
 
   emit('save', JSON.parse(JSON.stringify(local)))
   emit('update:modelValue', false)

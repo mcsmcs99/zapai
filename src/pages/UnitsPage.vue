@@ -127,6 +127,27 @@
               </div>
             </div>
             <div v-else class="text-grey-6">Nenhum link</div>
+
+            <!-- NEW: Serviços -->
+            <div class="text-caption text-grey-7 q-mt-md q-mb-xs">Serviços:</div>
+            <div v-if="(getServiceIds(u) || []).length">
+              <q-badge
+                v-for="s in mapServices(getServiceIds(u)).slice(0, 6)"
+                :key="s.id"
+                class="q-mr-xs q-mb-xs"
+                color="green-1"
+                text-color="green-9"
+                rounded
+                :label="s.title"
+              />
+              <div
+                v-if="mapServices(getServiceIds(u)).length > 6"
+                class="text-caption text-grey-6 q-mt-xs"
+              >
+                +{{ mapServices(getServiceIds(u)).length - 6 }} serviços
+              </div>
+            </div>
+            <div v-else class="text-grey-6">Nenhum serviço</div>
           </q-card-section>
         </q-card>
       </div>
@@ -155,6 +176,7 @@
       v-model="dlg.open"
       v-if="currentCompany"
       :company="currentCompany"
+      :services="servicesActive"
       :mode="dlg.mode"
       :value="unitsStore.currentUnit"
       @save="saveUnit"
@@ -163,18 +185,30 @@
 </template>
 
 <script setup>
-import { reactive, onMounted, ref } from 'vue'
+import { reactive, onMounted, ref, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useQuasar } from 'quasar'
 import UnitEditorDialog from 'components/UnitEditorDialog.vue'
 import { useUnitsStore } from 'src/stores/tenant/units'
 import { useOnboardingStore } from 'src/stores/onboarding'
 
+// NEW
+import { useServicesStore } from 'src/stores/tenant/services'
+
 defineOptions({ name: 'UnitsPage' })
 
 const $q = useQuasar()
 const unitsStore = useUnitsStore()
 const { units } = storeToRefs(unitsStore)
+
+// NEW
+const servicesStore = useServicesStore()
+const { services } = storeToRefs(servicesStore)
+
+// lista pra seleção (somente ativos)
+const servicesActive = computed(() =>
+  (services.value || []).filter(s => s.status === 'active')
+)
 
 // mesma ideia do ProfilePage
 const ob = useOnboardingStore()
@@ -198,6 +232,13 @@ function badgeLabel (l) {
   const provider = l.provider ? ` (${l.provider})` : ''
   return `${l.type}${provider}`
 }
+
+// NEW: compat serviceIds
+const getServiceIds = (unit) =>
+  unit?.serviceIds ?? unit?.service_ids ?? []
+
+const mapServices = (ids) =>
+  servicesActive.value.filter(s => (ids || []).includes(s.id))
 
 /**
  * Carrega empresa atual (mesma lógica do ProfilePage)
@@ -286,6 +327,10 @@ async function toggleActive (unit) {
 onMounted(async () => {
   unitsStore.loadFromSession?.()
   await unitsStore.fetchUnits()
+
+  // NEW: carrega serviços pra poder selecionar no editor + badges
+  servicesStore.loadFromSession?.()
+  await servicesStore.fetchServices({ limit: 9999 })
 })
 </script>
 

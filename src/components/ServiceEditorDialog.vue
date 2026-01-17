@@ -19,6 +19,7 @@
       <!-- Conteúdo -->
       <q-form class="q-pa-md" @submit.prevent="onSubmit">
         <div class="q-pa-md rounded-borders bg-grey-1" style="border:1px solid #ECECEC">
+
           <!-- Cabeçalho + status -->
           <div class="row items-center q-gutter-sm q-mb-md">
             <div class="row items-center q-gutter-sm">
@@ -30,7 +31,6 @@
 
             <q-space />
 
-            <!-- Toggle ativo / inativo -->
             <q-toggle
               v-model="local.status"
               :true-value="'active'"
@@ -41,6 +41,7 @@
             />
           </div>
 
+          <!-- Campos -->
           <div class="row q-col-gutter-md">
             <q-input
               class="col-12 col-md-8"
@@ -48,9 +49,9 @@
               outlined
               dense
               label="Nome do Serviço *"
-              placeholder="Ex: Corte Social, Barba, Manicure"
               :rules="[v => !!v || 'Informe o nome']"
             />
+
             <q-input
               class="col-12 col-md-4"
               v-model.number="local.price"
@@ -62,6 +63,7 @@
               label="Preço (R$) *"
               :rules="[v => v >= 0 || 'Inválido']"
             />
+
             <q-input
               class="col-12"
               v-model.number="local.duration"
@@ -72,6 +74,7 @@
               label="Duração (minutos) *"
               :rules="[v => v > 0 || 'Inválido']"
             />
+
             <q-input
               class="col-12"
               v-model="local.description"
@@ -79,7 +82,6 @@
               autogrow
               outlined
               label="Descrição"
-              placeholder="Descrição detalhada do serviço..."
             />
           </div>
 
@@ -89,33 +91,26 @@
               Colaboradores que podem realizar este serviço
             </div>
 
-            <!-- Estado vazio -->
             <q-banner
-              v-if="!collaborators || collaborators.length === 0"
+              v-if="!collaborators.length"
               rounded
               class="bg-grey-2 text-grey-9"
             >
               Nenhum colaborador cadastrado.
-              <div class="q-mt-xs text-caption">
-                Cadastre um colaborador no menu <b>Colaboradores &gt; Novo colaborador</b>.
-              </div>
             </q-banner>
 
-            <!-- Lista -->
             <q-list
               v-else
               bordered
               class="rounded-borders"
-              style="max-height: 280px; overflow: auto;"
+              style="max-height: 240px; overflow:auto"
             >
-              <q-item
-                v-for="c in collaborators"
-                :key="c.id"
-                tag="label"
-              >
+              <q-item v-for="c in collaborators" :key="c.id" tag="label">
                 <q-item-section side>
-                  <!-- importante: val numérico -->
-                  <q-checkbox v-model="local.collaboratorIds" :val="Number(c.id)" />
+                  <q-checkbox
+                    v-model="local.collaboratorIds"
+                    :val="Number(c.id)"
+                  />
                 </q-item-section>
 
                 <q-item-section>
@@ -123,6 +118,49 @@
                     {{ c.name }}
                   </q-item-label>
                   <q-item-label caption>{{ c.role }}</q-item-label>
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </div>
+
+          <!-- Unidades -->
+          <div class="q-mt-xl">
+            <div class="text-subtitle1 text-weight-bold q-mb-sm">
+              Unidades onde este serviço estará disponível
+            </div>
+
+            <q-banner
+              v-if="!units.length"
+              rounded
+              class="bg-grey-2 text-grey-9"
+            >
+              Nenhuma unidade cadastrada.
+              <div class="q-mt-xs text-caption">
+                Cadastre uma unidade no menu <b>Unidades &gt; Nova unidade</b>.
+              </div>
+            </q-banner>
+
+            <q-list
+              v-else
+              bordered
+              class="rounded-borders"
+              style="max-height: 240px; overflow:auto"
+            >
+              <q-item v-for="u in units" :key="u.id" tag="label">
+                <q-item-section side>
+                  <q-checkbox
+                    v-model="local.unitIds"
+                    :val="Number(u.id)"
+                  />
+                </q-item-section>
+
+                <q-item-section>
+                  <q-item-label class="text-weight-medium">
+                    {{ u.name }}
+                  </q-item-label>
+                  <q-item-label caption>
+                    {{ u.locality || u.administrative_area }}
+                  </q-item-label>
                 </q-item-section>
               </q-item>
             </q-list>
@@ -151,60 +189,49 @@ defineOptions({ name: 'ServiceEditorDialog' })
 
 function normalizeIds (raw) {
   if (!raw) return []
-  if (Array.isArray(raw)) return [...new Set(raw.map(Number).filter(Number.isFinite))]
-  return []
+  if (!Array.isArray(raw)) return []
+  return [...new Set(raw.map(Number).filter(Number.isFinite))]
 }
 
 function normalizeService (v = {}) {
   const out = JSON.parse(JSON.stringify(v || {}))
 
-  // compat: caso ainda venha collaborator_ids de algum lugar
   if (out.collaboratorIds === undefined && out.collaborator_ids !== undefined) {
     out.collaboratorIds = out.collaborator_ids
   }
-  delete out.collaborator_ids
+  if (out.unitIds === undefined && out.unit_ids !== undefined) {
+    out.unitIds = out.unit_ids
+  }
 
   out.collaboratorIds = normalizeIds(out.collaboratorIds)
+  out.unitIds = normalizeIds(out.unitIds)
+
+  delete out.collaborator_ids
+  delete out.unit_ids
 
   return out
 }
 
 const props = defineProps({
-  modelValue: { type: Boolean, default: false },
+  modelValue: Boolean,
   mode: { type: String, default: 'create' },
-  value: {
-    type: Object,
-    default: () => ({
-      id: null,
-      title: '',
-      price: 0,
-      duration: 30,
-      description: '',
-      status: 'active',
-      collaboratorIds: []
-    })
-  },
-  collaborators: {
-    type: Array,
-    default: () => []
-  }
+  value: { type: Object, default: () => ({}) },
+  collaborators: { type: Array, default: () => [] },
+  units: { type: Array, default: () => [] }
 })
+
 const emit = defineEmits(['update:modelValue', 'save'])
 
 const local = reactive(normalizeService(props.value))
 
 watch(
   () => props.value,
-  (v) => {
-    Object.assign(local, normalizeService(v))
-  },
+  v => Object.assign(local, normalizeService(v)),
   { deep: true }
 )
 
 function onSubmit () {
-  // garante IDs numéricos e únicos
-  const payload = normalizeService(local)
-  emit('save', payload)
+  emit('save', normalizeService(local))
   emit('update:modelValue', false)
 }
 </script>

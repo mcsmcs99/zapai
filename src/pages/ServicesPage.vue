@@ -100,12 +100,12 @@
 
           <q-separator />
 
+          <!-- Colaboradores -->
           <q-card-section>
             <div class="text-caption text-grey-7 q-mb-xs">
               Colaboradores:
             </div>
 
-            <!-- agora usa collaboratorIds (pivot) -->
             <div v-if="(getCollaboratorIds(s) || []).length">
               <q-badge
                 v-for="c in mapCollaborators(getCollaboratorIds(s))"
@@ -118,6 +118,26 @@
               />
             </div>
             <div v-else class="text-grey-6">Nenhum colaborador</div>
+          </q-card-section>
+
+          <!-- Unidades (novo) -->
+          <q-card-section class="q-pt-none">
+            <div class="text-caption text-grey-7 q-mb-xs">
+              Unidades:
+            </div>
+
+            <div v-if="(getUnitIds(s) || []).length">
+              <q-badge
+                v-for="u in mapUnits(getUnitIds(s))"
+                :key="u.id"
+                class="q-mr-xs q-mb-xs"
+                color="teal-1"
+                text-color="teal-10"
+                rounded
+                :label="u.name"
+              />
+            </div>
+            <div v-else class="text-grey-6">Nenhuma unidade</div>
           </q-card-section>
         </q-card>
       </div>
@@ -147,6 +167,7 @@
       :mode="dlg.mode"
       :value="servicesStore.currentService"
       :collaborators="collaborators"
+      :units="units"
       @save="saveService"
     />
   </q-page>
@@ -158,19 +179,28 @@ import { storeToRefs } from 'pinia'
 import ServiceEditorDialog from 'components/ServiceEditorDialog.vue'
 import { useServicesStore } from 'src/stores/tenant/services'
 import { useStaffStore } from 'src/stores/tenant/staff'
+import { useUnitsStore } from 'src/stores/tenant/units'
 
 defineOptions({ name: 'ServicesPage' })
 
 const servicesStore = useServicesStore()
 const staffStore = useStaffStore()
+const unitsStore = useUnitsStore()
 
 const { services } = storeToRefs(servicesStore)
 const { staff } = storeToRefs(staffStore)
+const { units: unitsRef } = storeToRefs(unitsStore)
 
 /* Colaboradores disponíveis = staff ativos do tenant */
 const collaborators = computed(() =>
   (staff.value || []).filter(s => s.status === 'active')
 )
+
+/* Unidades disponíveis = units ativas do tenant */
+const units = computed(() =>
+  (unitsRef.value || []).filter(u => u.is_active === true)
+)
+
 
 /* Helpers */
 const currency = v =>
@@ -188,6 +218,15 @@ const getCollaboratorIds = (service) =>
 
 const mapCollaborators = (ids) =>
   collaborators.value.filter(c => (ids || []).includes(c.id))
+
+/**
+ * compat: unitIds / unit_ids
+ */
+const getUnitIds = (service) =>
+  service?.unitIds ?? service?.unit_ids ?? []
+
+const mapUnits = (ids) =>
+  units.value.filter(u => (ids || []).includes(u.id))
 
 /* Modal de criar/editar */
 const dlg = reactive({
@@ -208,7 +247,6 @@ function openEdit (row) {
 }
 
 async function saveService (data) {
-  // Dialog já valida os campos e devolve o objeto local
   servicesStore.setCurrentService(data)
   const resp = await servicesStore.saveCurrentService()
 
@@ -246,9 +284,13 @@ onMounted(async () => {
   servicesStore.loadFromSession()
   await servicesStore.fetchServices()
 
-  // carrega colaboradores do tenant para vincular nos serviços
+  // carrega colaboradores
   staffStore.loadFromSession?.()
   await staffStore.fetchStaff()
+
+  // carrega unidades (novo)
+  unitsStore.loadFromSession?.()
+  await unitsStore.fetchUnits?.()
 })
 </script>
 

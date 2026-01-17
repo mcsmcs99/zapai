@@ -58,7 +58,8 @@ export const useServicesStore = defineStore('services', {
       duration: 30,
       description: '',
       status: 'active',
-      collaboratorIds: []
+      collaboratorIds: [],
+      unitIds: [] // NEW
     }
   }),
 
@@ -91,8 +92,10 @@ export const useServicesStore = defineStore('services', {
         description: serviceData.description ?? '',
         status: serviceData.status || 'active',
 
-        // agora vem direto do backend via pivot (array)
-        collaboratorIds: uniqIds(serviceData.collaboratorIds ?? serviceData.collaborator_ids)
+        collaboratorIds: uniqIds(serviceData.collaboratorIds ?? serviceData.collaborator_ids),
+
+        // NEW: vem do backend via pivot (array)
+        unitIds: uniqIds(serviceData.unitIds ?? serviceData.unit_ids)
       }
       this.saveToSession()
     },
@@ -122,7 +125,8 @@ export const useServicesStore = defineStore('services', {
         duration: 30,
         description: '',
         status: 'active',
-        collaboratorIds: []
+        collaboratorIds: [],
+        unitIds: [] // NEW
       }
       this.saveToSession()
     },
@@ -175,6 +179,7 @@ export const useServicesStore = defineStore('services', {
         if (data.currentService) {
           this.currentService = { ...this.currentService, ...data.currentService }
           this.currentService.collaboratorIds = uniqIds(this.currentService.collaboratorIds)
+          this.currentService.unitIds = uniqIds(this.currentService.unitIds) // NEW
         }
       } catch (e) {
         console.error('Erro ao carregar services_state da sessão', e)
@@ -189,17 +194,21 @@ export const useServicesStore = defineStore('services', {
     // Payload normalizer (nova lógica)
     // ---------------------------------------------------
     normalizeServicePayload (payload = {}) {
-      // garante que só vai "collaboratorIds" (array), não manda collaborator_ids
       const out = { ...payload }
 
+      // collaborators
       if ('collaborator_ids' in out && out.collaboratorIds === undefined) {
         out.collaboratorIds = out.collaborator_ids
       }
       if ('collaborator_ids' in out) delete out.collaborator_ids
+      if ('collaboratorIds' in out) out.collaboratorIds = uniqIds(out.collaboratorIds)
 
-      if ('collaboratorIds' in out) {
-        out.collaboratorIds = uniqIds(out.collaboratorIds)
+      // NEW: units
+      if ('unit_ids' in out && out.unitIds === undefined) {
+        out.unitIds = out.unit_ids
       }
+      if ('unit_ids' in out) delete out.unit_ids
+      if ('unitIds' in out) out.unitIds = uniqIds(out.unitIds)
 
       return out
     },
@@ -230,7 +239,8 @@ export const useServicesStore = defineStore('services', {
 
         this.services = (data.data || []).map(s => ({
           ...s,
-          collaboratorIds: uniqIds(s.collaboratorIds ?? s.collaborator_ids)
+          collaboratorIds: uniqIds(s.collaboratorIds ?? s.collaborator_ids),
+          unitIds: uniqIds(s.unitIds ?? s.unit_ids) // NEW
         }))
 
         if (data.meta) {
@@ -268,7 +278,8 @@ export const useServicesStore = defineStore('services', {
 
         const normalized = {
           ...data,
-          collaboratorIds: uniqIds(data.collaboratorIds ?? data.collaborator_ids)
+          collaboratorIds: uniqIds(data.collaboratorIds ?? data.collaborator_ids),
+          unitIds: uniqIds(data.unitIds ?? data.unit_ids) // NEW
         }
 
         this.currentService = { ...this.currentService, ...normalized }
@@ -304,7 +315,6 @@ export const useServicesStore = defineStore('services', {
           return { ok: false, error: msg }
         }
 
-        // IMPORTANT: manda apenas collaboratorIds (array)
         const payload = this.normalizeServicePayload({
           ...this.currentService
         })
@@ -324,7 +334,8 @@ export const useServicesStore = defineStore('services', {
 
         const normalized = {
           ...data,
-          collaboratorIds: uniqIds(data.collaboratorIds ?? data.collaborator_ids)
+          collaboratorIds: uniqIds(data.collaboratorIds ?? data.collaborator_ids),
+          unitIds: uniqIds(data.unitIds ?? data.unit_ids) // NEW
         }
 
         this.currentService = { ...this.currentService, ...normalized }
@@ -384,7 +395,8 @@ export const useServicesStore = defineStore('services', {
 
         const normalized = {
           ...data,
-          collaboratorIds: uniqIds(data.collaboratorIds ?? data.collaborator_ids)
+          collaboratorIds: uniqIds(data.collaboratorIds ?? data.collaborator_ids),
+          unitIds: uniqIds(data.unitIds ?? data.unit_ids) // NEW
         }
 
         const idx = this.services.findIndex(s => s.id === normalized.id)
