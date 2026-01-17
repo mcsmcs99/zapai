@@ -23,7 +23,7 @@
           <!-- Cabeçalho + status -->
           <div class="row items-center q-gutter-sm q-mb-md">
             <div class="row items-center q-gutter-sm">
-              <q-icon name="content_cut" />
+              <q-icon :name="iconName" />
               <div class="text-subtitle1 text-weight-bold">
                 {{ mode === 'create' ? 'Novo Serviço' : 'Editar Serviço' }}
               </div>
@@ -43,38 +43,81 @@
 
           <!-- Campos -->
           <div class="row q-col-gutter-md">
+
+            <!-- Linha 1: Nome + Ícone -->
             <q-input
-              class="col-12 col-md-8"
+              class="col-12 col-md-6"
               v-model="local.title"
               outlined
               dense
+              hide-bottom-space
               label="Nome do Serviço *"
               :rules="[v => !!v || 'Informe o nome']"
             />
 
+            <q-select
+              class="col-12 col-md-6 service-icon-select"
+              v-model="local.icon"
+              :options="filteredIconOptions"
+              option-label="label"
+              option-value="value"
+              emit-value
+              map-options
+              outlined
+              dense
+              clearable
+              use-input
+              input-debounce="0"
+              hide-bottom-space
+              label="Ícone do Serviço"
+              :display-value="selectedIconLabel(local.icon)"
+              @filter="filterIcons"
+            >
+              <!-- ícone dentro do campo (mantém altura igual ao q-input) -->
+              <template #prepend>
+                <q-icon :name="iconName" />
+              </template>
+
+              <!-- opções com preview -->
+              <template #option="scope">
+                <q-item v-bind="scope.itemProps">
+                  <q-item-section side>
+                    <q-icon :name="scope.opt.value" />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label>{{ scope.opt.label }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </template>
+            </q-select>
+
+            <!-- Linha 2: Preço + Duração -->
             <q-input
-              class="col-12 col-md-4"
+              class="col-12 col-md-6"
               v-model.number="local.price"
               type="number"
               min="0"
               step="0.01"
               outlined
               dense
+              hide-bottom-space
               label="Preço (R$) *"
               :rules="[v => v >= 0 || 'Inválido']"
             />
 
             <q-input
-              class="col-12"
+              class="col-12 col-md-6"
               v-model.number="local.duration"
               type="number"
               min="1"
               outlined
               dense
+              hide-bottom-space
               label="Duração (minutos) *"
               :rules="[v => v > 0 || 'Inválido']"
             />
 
+            <!-- Descrição -->
             <q-input
               class="col-12"
               v-model="local.description"
@@ -184,7 +227,7 @@
 </template>
 
 <script setup>
-import { reactive, watch } from 'vue'
+import { reactive, watch, ref, computed } from 'vue'
 defineOptions({ name: 'ServiceEditorDialog' })
 
 function normalizeIds (raw) {
@@ -205,6 +248,9 @@ function normalizeService (v = {}) {
 
   out.collaboratorIds = normalizeIds(out.collaboratorIds)
   out.unitIds = normalizeIds(out.unitIds)
+
+  if (typeof out.icon === 'object' && out.icon?.value) out.icon = out.icon.value
+  if (!out.icon || typeof out.icon !== 'string') out.icon = 'content_cut'
 
   delete out.collaborator_ids
   delete out.unit_ids
@@ -230,6 +276,89 @@ watch(
   { deep: true }
 )
 
+const iconName = computed(() => {
+  const v = local.icon
+  if (typeof v === 'string' && v) return v
+  if (v && typeof v === 'object' && v.value) return v.value
+  return 'content_cut'
+})
+
+const iconOptions = [
+  { label: 'Tesoura (Barbearia)', value: 'content_cut' },
+  { label: 'Salão / Beleza', value: 'spa' },
+  { label: 'Rosto / Beauty', value: 'face' },
+  { label: 'Mãos / Unhas', value: 'pan_tool' },
+  { label: 'Bem-estar', value: 'mood' },
+  { label: 'Relax', value: 'hot_tub' },
+  { label: 'Perfume / Flor', value: 'local_florist' },
+  { label: 'Saúde / Clínica', value: 'local_hospital' },
+  { label: 'Farmácia', value: 'local_pharmacy' },
+  { label: 'Acessibilidade', value: 'accessible' },
+  { label: 'Primeiros socorros', value: 'healing' },
+  { label: 'Informação médica', value: 'info' },
+  { label: 'Academia', value: 'fitness_center' },
+  { label: 'Corrida', value: 'directions_run' },
+  { label: 'Bicicleta', value: 'directions_bike' },
+  { label: 'Piscina', value: 'pool' },
+  { label: 'Esporte', value: 'sports_soccer' },
+  { label: 'Restaurante', value: 'restaurant' },
+  { label: 'Café', value: 'local_cafe' },
+  { label: 'Pizza', value: 'local_pizza' },
+  { label: 'Fast-food', value: 'fastfood' },
+  { label: 'Bolo / Doces', value: 'cake' },
+  { label: 'Mercado', value: 'shopping_cart' },
+  { label: 'Entrega / Motoboy', value: 'local_shipping' },
+  { label: 'Loja', value: 'store' },
+  { label: 'Ferramentas', value: 'build' },
+  { label: 'Construção', value: 'domain' },
+  { label: 'Limpeza', value: 'delete_sweep' },
+  { label: 'Pintura', value: 'format_paint' },
+  { label: 'Chave', value: 'vpn_key' },
+  { label: 'Carro', value: 'directions_car' },
+  { label: 'Lavagem', value: 'local_car_wash' },
+  { label: 'Gasolina', value: 'local_gas_station' },
+  { label: 'Pet', value: 'pets' },
+  { label: 'Agenda', value: 'event' },
+  { label: 'Horário', value: 'schedule' },
+  { label: 'Atendimento', value: 'support_agent' },
+  { label: 'Pessoas / Equipe', value: 'groups' },
+  { label: 'Dinheiro', value: 'attach_money' },
+  { label: 'Cartão', value: 'credit_card' },
+  { label: 'Recibo', value: 'receipt' },
+  { label: 'Marketing', value: 'trending_up' },
+  { label: 'Link', value: 'link' },
+  { label: 'Configurações', value: 'settings' },
+  { label: 'Escola', value: 'school' },
+  { label: 'Livro', value: 'menu_book' },
+  { label: 'Casa', value: 'home' },
+  { label: 'Local', value: 'place' },
+  { label: 'Mapa', value: 'map' }
+]
+
+const filteredIconOptions = ref([...iconOptions])
+
+function filterIcons (val, update) {
+  update(() => {
+    const v = (val || '').toLowerCase().trim()
+    filteredIconOptions.value = !v
+      ? [...iconOptions]
+      : iconOptions.filter(o =>
+          o.label.toLowerCase().includes(v) || o.value.toLowerCase().includes(v)
+        )
+  })
+}
+
+function selectedIconLabel (iconValue) {
+  if (typeof iconValue === 'string') {
+    const found = iconOptions.find(o => o.value === iconValue)
+    return found?.label || iconValue
+  }
+  if (iconValue && typeof iconValue === 'object') {
+    return iconValue.label || iconValue.value || 'content_cut'
+  }
+  return 'content_cut'
+}
+
 function onSubmit () {
   emit('save', normalizeService(local))
   emit('update:modelValue', false)
@@ -238,13 +367,20 @@ function onSubmit () {
 
 <style scoped>
 .editor-card {
-  min-width: 760px;
+  width: 760px;
   max-width: 92vw;
   border-radius: 14px;
 }
+
 @media (max-width: 780px) {
   .editor-card {
+    width: 92vw;
     min-width: auto;
   }
+}
+
+/* trava layout do select */
+.service-icon-select {
+  min-width: 0;
 }
 </style>

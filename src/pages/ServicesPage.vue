@@ -28,8 +28,14 @@
       >
         <q-card flat bordered class="service-card">
           <q-card-section class="row items-start no-wrap">
-            <q-avatar size="44px" color="blue-6" text-color="white" rounded>
-              <q-icon name="content_cut" />
+            <q-avatar
+              size="44px"
+              :color="s.status === 'active' ? 'blue-6' : 'grey-5'"
+              text-color="white"
+              rounded
+            >
+              <!-- ✅ ícone vem do banco (fallback para serviços antigos) -->
+              <q-icon :name="serviceIcon(s)" />
             </q-avatar>
 
             <div class="q-ml-md col">
@@ -120,7 +126,7 @@
             <div v-else class="text-grey-6">Nenhum colaborador</div>
           </q-card-section>
 
-          <!-- Unidades (novo) -->
+          <!-- Unidades -->
           <q-card-section class="q-pt-none">
             <div class="text-caption text-grey-7 q-mb-xs">
               Unidades:
@@ -201,13 +207,20 @@ const units = computed(() =>
   (unitsRef.value || []).filter(u => u.is_active === true)
 )
 
-
 /* Helpers */
 const currency = v =>
   new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL'
   }).format(Number(v || 0))
+
+// ✅ ícone vem do banco (fallback para serviços antigos)
+const serviceIcon = (service) => {
+  const v = service?.icon
+  if (typeof v === 'string' && v) return v
+  if (v && typeof v === 'object' && v.value) return v.value // compat
+  return 'content_cut'
+}
 
 /**
  * compat: caso algum endpoint ainda devolva collaborator_ids,
@@ -288,7 +301,7 @@ onMounted(async () => {
   staffStore.loadFromSession?.()
   await staffStore.fetchStaff()
 
-  // carrega unidades (novo)
+  // carrega unidades
   unitsStore.loadFromSession?.()
   await unitsStore.fetchUnits?.()
 })

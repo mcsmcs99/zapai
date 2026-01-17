@@ -132,12 +132,12 @@
                 </div>
 
                 <div class="row items-center q-gutter-xs q-mt-xs">
-                  <!-- Unidade (novo) -->
+                  <!-- Unidade -->
                   <q-chip dense square icon="store" color="grey-2" text-color="grey-9">
                     {{ a.unit || 'Unidade' }}
                   </q-chip>
 
-                  <q-chip dense square icon="content_cut" color="grey-2" text-color="grey-9">
+                  <q-chip dense square :icon="a.serviceIcon" color="grey-2" text-color="grey-9">
                     {{ a.service }}
                   </q-chip>
 
@@ -250,7 +250,7 @@ import AppointmentEditorDialog from 'components/AppointmentEditorDialog.vue'
 
 import { useServicesStore } from 'src/stores/tenant/services'
 import { useStaffStore } from 'src/stores/tenant/staff'
-import { useUnitsStore } from 'src/stores/tenant/units' // ✅ NOVO
+import { useUnitsStore } from 'src/stores/tenant/units'
 import { useAppointmentsStore } from 'src/stores/tenant/appointments'
 
 defineOptions({ name: 'AppointmentsPage' })
@@ -258,12 +258,12 @@ defineOptions({ name: 'AppointmentsPage' })
 /* ---------------- stores ---------------- */
 const servicesStore = useServicesStore()
 const staffStore = useStaffStore()
-const unitsStore = useUnitsStore() // ✅ NOVO
+const unitsStore = useUnitsStore()
 const appointmentsStore = useAppointmentsStore()
 
 const { services } = storeToRefs(servicesStore)
 const { staff } = storeToRefs(staffStore)
-const { units } = storeToRefs(unitsStore) // ✅ NOVO
+const { units } = storeToRefs(unitsStore)
 const { appointments, meta, loadingList } = storeToRefs(appointmentsStore)
 
 /* ---------------- units helpers ---------------- */
@@ -295,8 +295,6 @@ async function changePage (p) {
 }
 
 /* ---------------- staff/services helpers ---------------- */
-
-/** ✅ só ativos (evita agendar com inativo) */
 const activeStaff = computed(() =>
   (staff.value || []).filter(s => s.status === 'active')
 )
@@ -342,6 +340,11 @@ const staffForDialog = computed(() => {
   return activeStaff.value
 })
 
+function getServiceIcon (serviceId) {
+  const s = serviceById.value.get(Number(serviceId))
+  return (typeof s?.icon === 'string' && s.icon.trim()) ? s.icon.trim() : 'content_cut'
+}
+
 /* ---------------- appointments (enriched) ---------------- */
 const appointmentsEnriched = computed(() => {
   return (appointments.value || []).map(a => {
@@ -357,6 +360,7 @@ const appointmentsEnriched = computed(() => {
       ...a,
       unit: u?.name || 'Unidade não encontrada',
       service: s?.title || 'Serviço não encontrado',
+      serviceIcon: getServiceIcon(serviceId),
       collaborator: c?.name || 'Colaborador não encontrado',
       customer: a.customer_name ?? a.customerName ?? a.customer ?? ''
     }
@@ -416,7 +420,7 @@ const isoToBR = (iso) => {
 function mapRowToDialogValue (a) {
   return {
     id: a.id,
-    unit_id: a.unit_id ?? a.unitId ?? null,              // ✅ NOVO
+    unit_id: a.unit_id ?? a.unitId ?? null,
     service_id: a.service_id ?? a.serviceId ?? null,
     collaborator_id: a.collaborator_id ?? a.collaboratorId ?? null,
 
@@ -579,13 +583,13 @@ const formatGroupLabel = (iso) => fmtDateLong(iso)
 onMounted(async () => {
   servicesStore.loadFromSession()
   staffStore.loadFromSession?.()
-  unitsStore.loadFromSession?.()            // ✅ NOVO
+  unitsStore.loadFromSession?.()
   appointmentsStore.loadFromSession?.()
 
   await Promise.all([
     servicesStore.fetchServices(),
     staffStore.fetchStaff(),
-    unitsStore.fetchUnits?.(),              // ✅ NOVO
+    unitsStore.fetchUnits?.(),
     appointmentsStore.fetchAppointments({ page: meta.value?.page || 1 })
   ])
 })

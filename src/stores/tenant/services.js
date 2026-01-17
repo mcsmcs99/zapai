@@ -31,6 +31,12 @@ function uniqIds (arr) {
   return [...new Set(parseIds(arr))]
 }
 
+function normalizeIcon (raw) {
+  if (typeof raw === 'string' && raw) return raw
+  if (raw && typeof raw === 'object' && raw.value) return raw.value
+  return 'content_cut'
+}
+
 export const useServicesStore = defineStore('services', {
   state: () => ({
     loadingList: false,
@@ -54,6 +60,7 @@ export const useServicesStore = defineStore('services', {
     currentService: {
       id: null,
       title: '',
+      icon: 'content_cut',
       price: 0,
       duration: 30,
       description: '',
@@ -78,7 +85,9 @@ export const useServicesStore = defineStore('services', {
     // state helpers ------------------------------------
     setCurrentServiceField (key, val) {
       if (key in this.currentService) {
-        this.currentService[key] = val
+        if (key === 'icon') this.currentService[key] = normalizeIcon(val)
+        else this.currentService[key] = val
+
         this.saveToSession()
       }
     },
@@ -87,6 +96,7 @@ export const useServicesStore = defineStore('services', {
       this.currentService = {
         id: serviceData.id ?? null,
         title: serviceData.title ?? '',
+        icon: normalizeIcon(serviceData.icon),
         price: serviceData.price ?? 0,
         duration: serviceData.duration ?? 30,
         description: serviceData.description ?? '',
@@ -121,12 +131,13 @@ export const useServicesStore = defineStore('services', {
       this.currentService = {
         id: null,
         title: '',
+        icon: 'content_cut',
         price: 0,
         duration: 30,
         description: '',
         status: 'active',
         collaboratorIds: [],
-        unitIds: [] // NEW
+        unitIds: []
       }
       this.saveToSession()
     },
@@ -178,8 +189,9 @@ export const useServicesStore = defineStore('services', {
         }
         if (data.currentService) {
           this.currentService = { ...this.currentService, ...data.currentService }
+          this.currentService.icon = normalizeIcon(this.currentService.icon)
           this.currentService.collaboratorIds = uniqIds(this.currentService.collaboratorIds)
-          this.currentService.unitIds = uniqIds(this.currentService.unitIds) // NEW
+          this.currentService.unitIds = uniqIds(this.currentService.unitIds)
         }
       } catch (e) {
         console.error('Erro ao carregar services_state da sessão', e)
@@ -196,6 +208,8 @@ export const useServicesStore = defineStore('services', {
     normalizeServicePayload (payload = {}) {
       const out = { ...payload }
 
+      out.icon = normalizeIcon(out.icon)
+
       // collaborators
       if ('collaborator_ids' in out && out.collaboratorIds === undefined) {
         out.collaboratorIds = out.collaborator_ids
@@ -203,7 +217,6 @@ export const useServicesStore = defineStore('services', {
       if ('collaborator_ids' in out) delete out.collaborator_ids
       if ('collaboratorIds' in out) out.collaboratorIds = uniqIds(out.collaboratorIds)
 
-      // NEW: units
       if ('unit_ids' in out && out.unitIds === undefined) {
         out.unitIds = out.unit_ids
       }
@@ -239,8 +252,9 @@ export const useServicesStore = defineStore('services', {
 
         this.services = (data.data || []).map(s => ({
           ...s,
+          icon: normalizeIcon(s.icon),
           collaboratorIds: uniqIds(s.collaboratorIds ?? s.collaborator_ids),
-          unitIds: uniqIds(s.unitIds ?? s.unit_ids) // NEW
+          unitIds: uniqIds(s.unitIds ?? s.unit_ids)
         }))
 
         if (data.meta) {
@@ -278,8 +292,9 @@ export const useServicesStore = defineStore('services', {
 
         const normalized = {
           ...data,
+          icon: normalizeIcon(data.icon),
           collaboratorIds: uniqIds(data.collaboratorIds ?? data.collaborator_ids),
-          unitIds: uniqIds(data.unitIds ?? data.unit_ids) // NEW
+          unitIds: uniqIds(data.unitIds ?? data.unit_ids)
         }
 
         this.currentService = { ...this.currentService, ...normalized }
@@ -334,8 +349,9 @@ export const useServicesStore = defineStore('services', {
 
         const normalized = {
           ...data,
+          icon: normalizeIcon(data.icon),
           collaboratorIds: uniqIds(data.collaboratorIds ?? data.collaborator_ids),
-          unitIds: uniqIds(data.unitIds ?? data.unit_ids) // NEW
+          unitIds: uniqIds(data.unitIds ?? data.unit_ids)
         }
 
         this.currentService = { ...this.currentService, ...normalized }
@@ -395,8 +411,9 @@ export const useServicesStore = defineStore('services', {
 
         const normalized = {
           ...data,
+          icon: normalizeIcon(data.icon),
           collaboratorIds: uniqIds(data.collaboratorIds ?? data.collaborator_ids),
-          unitIds: uniqIds(data.unitIds ?? data.unit_ids) // NEW
+          unitIds: uniqIds(data.unitIds ?? data.unit_ids)
         }
 
         const idx = this.services.findIndex(s => s.id === normalized.id)
