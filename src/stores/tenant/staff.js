@@ -8,7 +8,6 @@ const KEY = 'staff_state'
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 
 function createDefaultSchedule () {
-  // agora cada intervalo tem unit_id (null por padrão)
   const baseOpen = {
     closed: false,
     intervals: [{ start: '08:30', end: '17:30', unit_id: null }]
@@ -31,10 +30,17 @@ function createDefaultSchedule () {
 }
 
 /**
- * Compat/normalização do schedule:
- * - suporta formato antigo (string "08:30-17:30, 18:00-20:00" ou "Fechado")
- * - suporta objeto novo { closed, intervals[] }
- * - garante intervalos com { start, end, unit_id }
+ * ✅ NEW: normaliza o tipo de atendimento do colaborador
+ */
+function normalizeAttendanceMode (raw) {
+  const v = String(raw || '').trim()
+  if (v === 'fixed' || v === 'client_location' || v === 'mixed') return v
+  return 'fixed'
+}
+
+/**
+ * Compat/normalização do schedule (formato novo/antigo)
+ * garante intervalos com { start, end, unit_id }
  */
 function normalizeSchedule (rawSchedule) {
   const src = rawSchedule || {}
@@ -43,7 +49,6 @@ function normalizeSchedule (rawSchedule) {
   for (const key of DAY_KEYS) {
     const v = src[key]
 
-    // formato novo (objeto)
     if (v && typeof v === 'object' && 'closed' in v && Array.isArray(v.intervals)) {
       const intervals = v.intervals
         .map(it => ({
@@ -51,17 +56,15 @@ function normalizeSchedule (rawSchedule) {
           end: it?.end ?? null,
           unit_id: it?.unit_id != null ? Number(it.unit_id) : null
         }))
-        // remove intervalos totalmente vazios (opcional, mas ajuda)
         .filter(it => it.start || it.end || it.unit_id)
 
       result[key] = {
         closed: !!v.closed,
-        intervals: intervals
+        intervals
       }
       continue
     }
 
-    // formato antigo (string)
     if (typeof v === 'string') {
       const trimmed = v.trim()
 
@@ -87,11 +90,29 @@ function normalizeSchedule (rawSchedule) {
       continue
     }
 
-    // qualquer outro caso: garante estrutura
     result[key] = { closed: true, intervals: [] }
   }
 
   return result
+}
+
+/**
+ * ✅ NEW: se for colaborador domiciliar, remove unit_id dos intervalos
+ */
+function stripUnitsFromSchedule (schedule) {
+  const normalized = normalizeSchedule(schedule)
+
+  for (const key of DAY_KEYS) {
+    const day = normalized[key]
+    if (!day || !Array.isArray(day.intervals)) continue
+    day.intervals = day.intervals.map(it => ({
+      start: it.start ?? null,
+      end: it.end ?? null,
+      unit_id: null
+    }))
+  }
+
+  return normalized
 }
 
 function parseIds (raw) {
@@ -145,6 +166,8 @@ export const useStaffStore = defineStore('staff', {
       role: '',
       photoUrl: '',
       status: 'active',
+      // ✅ NEW
+      attendance_mode: 'fixed',
       schedule: createDefaultSchedule(),
       serviceIds: []
     }
@@ -165,12 +188,27 @@ export const useStaffStore = defineStore('staff', {
     // state helpers ------------------------------------
     setCurrentStaffField (key, val) {
       if (key in this.currentStaff) {
-        this.currentStaff[key] = val
+        // ✅ NEW
+        if (key === 'attendance_mode') this.currentStaff[key] = normalizeAttendanceMode(val)
+        else this.currentStaff[key] = val
+
         this.saveToSession()
       }
     },
 
     setCurrentStaff (staffData = {}) {
+      const attendance_mode = normalizeAttendanceMode(
+        staffData.attendance_mode ?? staffData.attendanceMode
+      )
+
+      // schedule sempre normalizado
+      let schedule = normalizeSchedule(staffData.schedule) || createDefaultSchedule()
+
+      // ✅ NEW: se domiciliar, limpa unit_id dos intervalos no state (pra não confundir UI)
+      if (attendance_mode === 'client_location') {
+        schedule = stripUnitsFromSchedule(schedule)
+      }
+
       this.currentStaff = {
         id: staffData.id ?? null,
         name: staffData.name ?? '',
@@ -178,12 +216,13 @@ export const useStaffStore = defineStore('staff', {
         photoUrl: staffData.photoUrl ?? staffData.photo_url ?? '',
         status: staffData.status || 'active',
 
-        // 🔥 garante schedule no formato novo + unit_id por intervalo
-        schedule: normalizeSchedule(staffData.schedule) || createDefaultSchedule(),
+        // ✅ NEW
+        attendance_mode,
 
-        // pivot como array
+        schedule,
         serviceIds: uniqIds(staffData.serviceIds ?? staffData.service_ids)
       }
+
       this.saveToSession()
     },
 
@@ -211,6 +250,8 @@ export const useStaffStore = defineStore('staff', {
         role: '',
         photoUrl: '',
         status: 'active',
+        // ✅ NEW
+        attendance_mode: 'fixed',
         schedule: createDefaultSchedule(),
         serviceIds: []
       }
@@ -257,20 +298,21 @@ export const useStaffStore = defineStore('staff', {
       try {
         const data = JSON.parse(raw)
 
-        if (data.meta) {
-          this.meta = { ...this.meta, ...data.meta }
-        }
-
-        if (data.filters) {
-          this.filters = { ...this.filters, ...data.filters }
-        }
+        if (data.meta) this.meta = { ...this.meta, ...data.meta }
+        if (data.filters) this.filters = { ...this.filters, ...data.filters }
 
         if (data.currentStaff) {
           this.currentStaff = { ...this.currentStaff, ...data.currentStaff }
+
+          // ✅ NEW: normalize novamente
+          this.currentStaff.attendance_mode = normalizeAttendanceMode(this.currentStaff.attendance_mode)
           this.currentStaff.serviceIds = uniqIds(this.currentStaff.serviceIds)
 
-          // 🔥 garante schedule ok ao recuperar sessão
-          this.currentStaff.schedule = normalizeSchedule(this.currentStaff.schedule) || createDefaultSchedule()
+          let schedule = normalizeSchedule(this.currentStaff.schedule) || createDefaultSchedule()
+          if (this.currentStaff.attendance_mode === 'client_location') {
+            schedule = stripUnitsFromSchedule(schedule)
+          }
+          this.currentStaff.schedule = schedule
         }
       } catch (e) {
         console.error('Erro ao carregar staff_state da sessão', e)
@@ -282,29 +324,38 @@ export const useStaffStore = defineStore('staff', {
     },
 
     // ---------------------------------------------------
-    // Payload normalizer (nova lógica)
+    // Payload normalizer
     // ---------------------------------------------------
     normalizeStaffPayload (payload = {}) {
       const out = { ...payload }
 
-      // garante consistência photoUrl -> photo_url (back usa photo_url)
+      // photoUrl -> photo_url
       if (out.photoUrl !== undefined && out.photo_url === undefined) {
         out.photo_url = out.photoUrl
       }
       delete out.photoUrl
 
-      // garante que só vai "serviceIds" (array), não manda service_ids
+      // serviceIds
       if ('service_ids' in out && out.serviceIds === undefined) {
         out.serviceIds = out.service_ids
       }
       if ('service_ids' in out) delete out.service_ids
+      if ('serviceIds' in out) out.serviceIds = uniqIds(out.serviceIds)
 
-      if ('serviceIds' in out) {
-        out.serviceIds = uniqIds(out.serviceIds)
+      // ✅ NEW: attendance_mode (aceita attendanceMode também)
+      if (out.attendanceMode !== undefined && out.attendance_mode === undefined) {
+        out.attendance_mode = out.attendanceMode
       }
+      delete out.attendanceMode
+      out.attendance_mode = normalizeAttendanceMode(out.attendance_mode)
 
-      // 🔥 normalize schedule sempre antes de enviar
+      // schedule
       out.schedule = normalizeSchedule(out.schedule)
+
+      // ✅ NEW: se domiciliar, não manda unit_id (back fica limpo)
+      if (out.attendance_mode === 'client_location') {
+        out.schedule = stripUnitsFromSchedule(out.schedule)
+      }
 
       return out
     },
@@ -313,7 +364,6 @@ export const useStaffStore = defineStore('staff', {
 
     async fetchStaff (params = {}) {
       this.loadingList = true
-
       try {
         const userId = this.getCurrentUserId()
         const groupId = this.getCurrentGroupId()
@@ -327,18 +377,28 @@ export const useStaffStore = defineStore('staff', {
 
         const status = params.status ?? this.filters.status
         const search = params.search ?? this.filters.search
-
         if (status) query.status = status
         if (search) query.search = search
 
         const { data } = await api.get('/tenant/staff', { params: query })
 
-        this.staff = (data.data || []).map(s => ({
-          ...s,
-          photoUrl: s.photoUrl ?? s.photo_url ?? '',
-          serviceIds: uniqIds(s.serviceIds ?? s.service_ids),
-          schedule: normalizeSchedule(s.schedule)
-        }))
+        this.staff = (data.data || []).map(s => {
+          const attendance_mode = normalizeAttendanceMode(s.attendance_mode ?? s.attendanceMode)
+          let schedule = normalizeSchedule(s.schedule)
+
+          // ✅ NEW
+          if (attendance_mode === 'client_location') {
+            schedule = stripUnitsFromSchedule(schedule)
+          }
+
+          return {
+            ...s,
+            photoUrl: s.photoUrl ?? s.photo_url ?? '',
+            attendance_mode,
+            serviceIds: uniqIds(s.serviceIds ?? s.service_ids),
+            schedule
+          }
+        })
 
         if (data.meta) {
           this.meta = { ...this.meta, ...data.meta }
@@ -373,11 +433,20 @@ export const useStaffStore = defineStore('staff', {
           params: { user_id: userId, group_id: groupId }
         })
 
+        const attendance_mode = normalizeAttendanceMode(data.attendance_mode ?? data.attendanceMode)
+        let schedule = normalizeSchedule(data.schedule)
+
+        // ✅ NEW
+        if (attendance_mode === 'client_location') {
+          schedule = stripUnitsFromSchedule(schedule)
+        }
+
         const normalized = {
           ...data,
           photoUrl: data.photoUrl ?? data.photo_url ?? '',
+          attendance_mode,
           serviceIds: uniqIds(data.serviceIds ?? data.service_ids),
-          schedule: normalizeSchedule(data.schedule)
+          schedule
         }
 
         this.currentStaff = { ...this.currentStaff, ...normalized }
@@ -413,7 +482,6 @@ export const useStaffStore = defineStore('staff', {
           return { ok: false, error: msg }
         }
 
-        // IMPORTANT: manda serviceIds como array e schedule normalizado com unit_id
         const payload = this.normalizeStaffPayload({
           ...this.currentStaff
         })
@@ -431,21 +499,28 @@ export const useStaffStore = defineStore('staff', {
 
         const data = resp.data
 
+        const attendance_mode = normalizeAttendanceMode(
+          data.attendance_mode ?? data.attendanceMode ?? payload.attendance_mode
+        )
+
+        let schedule = normalizeSchedule(data.schedule ?? payload.schedule)
+        if (attendance_mode === 'client_location') {
+          schedule = stripUnitsFromSchedule(schedule)
+        }
+
         const normalized = {
           ...data,
           photoUrl: data.photoUrl ?? data.photo_url ?? this.currentStaff.photoUrl ?? '',
+          attendance_mode,
           serviceIds: uniqIds(data.serviceIds ?? data.service_ids ?? payload.serviceIds),
-          schedule: normalizeSchedule(data.schedule ?? payload.schedule)
+          schedule
         }
 
         this.currentStaff = { ...this.currentStaff, ...normalized }
 
         const index = this.staff.findIndex(s => s.id === normalized.id)
-        if (index !== -1) {
-          this.staff.splice(index, 1, normalized)
-        } else {
-          this.staff.unshift(normalized)
-        }
+        if (index !== -1) this.staff.splice(index, 1, normalized)
+        else this.staff.unshift(normalized)
 
         this.saveToSession()
 

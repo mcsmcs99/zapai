@@ -56,14 +56,47 @@
               dense
               :rules="[v => !!v || 'Campo obrigatório']"
             />
+
+            <!-- ✅ NEW: Modo de atendimento -->
+            <q-select
+              class="col-12 col-md-6 staff-attendance-select"
+              v-model="local.attendance_mode"
+              :options="attendanceModeOptions"
+              option-label="label"
+              option-value="value"
+              emit-value
+              map-options
+              outlined
+              dense
+              hide-bottom-space
+              label="Tipo de atendimento *"
+              :display-value="selectedAttendanceLabel(local.attendance_mode)"
+              :rules="[v => !!v || 'Campo obrigatório']"
+            >
+              <template #prepend>
+                <q-icon :name="attendanceIcon(local.attendance_mode)" />
+              </template>
+            </q-select>
+
             <q-input
-              class="col-12"
+              class="col-12 col-md-6"
               v-model="local.photoUrl"
               label="URL da Foto (Opcional)"
               outlined
               dense
             />
           </div>
+
+          <q-banner class="q-mt-md bg-blue-1 text-blue-10" rounded>
+            <div class="text-subtitle2 text-weight-medium q-mb-xs">
+              Como funciona
+            </div>
+            <ul class="q-pl-md q-mb-none">
+              <li><b>Somente Unidade</b>: agenda tradicional por unidade.</li>
+              <li><b>Somente Domicílio</b>: agenda com endereço do cliente (não exige unidade no horário).</li>
+              <li><b>Ambos</b>: o colaborador pode atender nos dois formatos.</li>
+            </ul>
+          </q-banner>
 
           <!-- Serviços -->
           <div class="q-mt-lg">
@@ -73,7 +106,7 @@
 
             <!-- Estado vazio -->
             <q-banner
-              v-if="!services || services.length === 0"
+              v-if="!filteredServices || filteredServices.length === 0"
               rounded
               class="bg-grey-2 text-grey-9"
             >
@@ -91,7 +124,7 @@
               style="max-height: 280px; overflow: auto;"
             >
               <q-item
-                v-for="s in services"
+                v-for="s in filteredServices"
                 :key="s.id"
                 tag="label"
               >
@@ -112,6 +145,11 @@
                     <span v-if="s.status" class="q-ml-sm">
                       • {{ s.status === 'active' ? 'Ativo' : 'Inativo' }}
                     </span>
+
+                    <!-- opcional: mostra tipo do serviço se vier -->
+                    <span v-if="s.attendance_mode" class="q-ml-sm">
+                      • {{ attendanceChipLabel(s.attendance_mode) }}
+                    </span>
                   </q-item-label>
                 </q-item-section>
               </q-item>
@@ -126,6 +164,18 @@
                 Horários de Trabalho
               </div>
             </div>
+
+            <!-- Se for domicílio, avisa que unidade não é obrigatória -->
+            <q-banner
+              v-if="local.attendance_mode === 'client_location'"
+              class="q-mb-md bg-purple-1 text-purple-10"
+              rounded
+            >
+              Este colaborador está configurado como <b>Somente Domicílio</b>.
+              <div class="text-caption q-mt-xs">
+                Nos intervalos abaixo, a seleção de <b>Unidade</b> não será obrigatória.
+              </div>
+            </q-banner>
 
             <div class="row q-col-gutter-md">
               <div
@@ -237,8 +287,9 @@
                         map-options
                       />
 
+                      <!-- Unidade: desabilita se for domicílio-only -->
                       <q-select
-                        class="col-3"
+                        class="col-3 staff-unit-select"
                         v-model="interval.unit_id"
                         :options="unitOptions"
                         label="Unidade"
@@ -246,6 +297,9 @@
                         outlined
                         emit-value
                         map-options
+                        clearable
+                        :disable="local.attendance_mode === 'client_location'"
+                        :display-value="selectedUnitLabel(interval.unit_id)"
                       />
 
                       <div class="col-1 flex flex-center">
@@ -280,12 +334,15 @@
               </div>
               <ul class="q-pl-md q-mb-none">
                 <li>Use os seletores para escolher os horários de início e fim.</li>
-                <li>
+                <li v-if="local.attendance_mode !== 'client_location'">
                   Em cada intervalo, selecione a <b>Unidade</b> onde o colaborador estará.
+                </li>
+                <li v-else>
+                  Como é <b>Somente Domicílio</b>, não é necessário selecionar unidade nos intervalos.
                 </li>
                 <li>
                   Clique em <b>Adicionar intervalo</b> para configurar horário de
-                  almoço ou turnos diferentes (manhã em uma unidade e tarde em outra).
+                  almoço ou turnos diferentes.
                 </li>
                 <li>
                   Use o toggle para marcar o dia como <b>Fechado</b>.
@@ -326,6 +383,12 @@ const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 function uniqIds (raw) {
   const arr = Array.isArray(raw) ? raw : []
   return [...new Set(arr.map(Number).filter(Number.isFinite))]
+}
+
+function normalizeAttendanceMode (raw) {
+  const v = String(raw || '').trim()
+  if (v === 'fixed' || v === 'client_location' || v === 'mixed') return v
+  return 'fixed'
 }
 
 /**
@@ -400,6 +463,13 @@ function normalizeStaff (v = {}) {
   }
   delete cloned.photo_url
 
+  // ✅ NEW: attendance_mode
+  if (cloned.attendance_mode === undefined && cloned.attendanceMode !== undefined) {
+    cloned.attendance_mode = cloned.attendanceMode
+  }
+  delete cloned.attendanceMode
+  cloned.attendance_mode = normalizeAttendanceMode(cloned.attendance_mode)
+
   if (!cloned.status) cloned.status = 'active'
   cloned.serviceIds = uniqIds(cloned.serviceIds)
   cloned.schedule = normalizeSchedule(cloned.schedule)
@@ -420,6 +490,7 @@ const props = defineProps({
       role: '',
       photoUrl: '',
       status: 'active',
+      attendance_mode: 'fixed',
       serviceIds: [],
       schedule: {
         mon: '08:30-17:30',
@@ -432,14 +503,8 @@ const props = defineProps({
       }
     })
   },
-  services: {
-    type: Array,
-    default: () => []
-  },
-  units: {
-    type: Array,
-    default: () => []
-  }
+  services: { type: Array, default: () => [] },
+  units: { type: Array, default: () => [] }
 })
 
 const emit = defineEmits(['update:modelValue', 'save'])
@@ -451,6 +516,17 @@ watch(
   (v) => Object.assign(local, normalizeStaff(v)),
   { deep: true }
 )
+
+/**
+ * ✅ AJUSTE ÚNICO PEDIDO:
+ * - Não filtra por attendance_mode (nem do colaborador, nem do serviço).
+ * - Único filtro: serviço ativo.
+ * - Mantém o restante do arquivo igual.
+ */
+const filteredServices = computed(() => {
+  const list = Array.isArray(props.services) ? props.services : []
+  return list.filter(s => String(s?.status || 'active') === 'active')
+})
 
 const days = [
   { key: 'mon', label: 'Segunda-feira' },
@@ -467,6 +543,13 @@ const unitOptions = computed(() =>
     .filter(u => u.is_active === true)
     .map(u => ({ label: u.name, value: Number(u.id) }))
 )
+
+function selectedUnitLabel (unitId) {
+  if (unitId == null) return ''
+  const id = Number(unitId)
+  const found = unitOptions.value.find(o => o.value === id)
+  return found?.label || `Unidade #${id}`
+}
 
 const timeOptions = computed(() => {
   const out = []
@@ -569,10 +652,8 @@ function validateSchedule () {
     const day = local.schedule[d.key]
     if (!day) continue
 
-    // se estiver fechado, ignora
     if (day.closed) continue
 
-    // dia aberto precisa ter pelo menos 1 intervalo
     const rawIntervals = Array.isArray(day.intervals) ? day.intervals : []
     if (!rawIntervals.length) {
       $q.notify({
@@ -582,7 +663,6 @@ function validateSchedule () {
       return false
     }
 
-    // ordena pra validar sobreposição
     const intervals = [...rawIntervals].sort((a, b) =>
       (a.start || '').localeCompare(b.start || '')
     )
@@ -590,7 +670,6 @@ function validateSchedule () {
     for (let i = 0; i < intervals.length; i++) {
       const { start, end, unit_id } = intervals[i]
 
-      // valida inicio/fim
       if (!start || !end || start >= end) {
         $q.notify({
           type: 'negative',
@@ -599,16 +678,18 @@ function validateSchedule () {
         return false
       }
 
-      const unitIdNum = Number(unit_id)
-      if (!Number.isFinite(unitIdNum) || unitIdNum <= 0) {
-        $q.notify({
-          type: 'negative',
-          message: `Selecione a unidade em ${d.label} (${start} - ${end}).`
-        })
-        return false
+      // ✅ NEW: só exige unidade se NÃO for domicílio-only
+      if (local.attendance_mode !== 'client_location') {
+        const unitIdNum = Number(unit_id)
+        if (!Number.isFinite(unitIdNum) || unitIdNum <= 0) {
+          $q.notify({
+            type: 'negative',
+            message: `Selecione a unidade em ${d.label} (${start} - ${end}).`
+          })
+          return false
+        }
       }
 
-      // valida sobreposição
       if (i > 0) {
         const prev = intervals[i - 1]
         if (start < prev.end) {
@@ -625,11 +706,33 @@ function validateSchedule () {
   return true
 }
 
+function attendanceIcon (mode) {
+  if (mode === 'client_location') return 'home'
+  if (mode === 'mixed') return 'swap_horiz'
+  return 'store'
+}
+
+const attendanceModeOptions = [
+  { label: 'Somente Unidade', value: 'fixed' },
+  { label: 'Somente Domicílio', value: 'client_location' },
+  { label: 'Ambos', value: 'mixed' }
+]
+
+function selectedAttendanceLabel (val) {
+  const found = attendanceModeOptions.find(o => o.value === val)
+  return found?.label || ''
+}
+
+function attendanceChipLabel (mode) {
+  if (mode === 'client_location') return 'Domicílio'
+  if (mode === 'mixed') return 'Ambos'
+  return 'Unidade'
+}
+
 function onSubmit () {
   if (!validateSchedule()) return
 
   const payload = normalizeStaff(local)
-
   emit('save', payload)
   emit('update:modelValue', false)
 }
@@ -650,5 +753,11 @@ function onSubmit () {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+/* ✅ trava layout do select (igual seu icon select) */
+.staff-attendance-select,
+.staff-unit-select {
+  min-width: 0;
 }
 </style>

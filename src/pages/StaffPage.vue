@@ -83,13 +83,22 @@
                 </q-btn>
               </div>
 
-              <q-badge
-                rounded
-                color="deep-purple-1"
-                text-color="deep-purple-8"
-                :label="p.role"
-                class="q-mt-xs"
-              />
+              <div class="row items-center q-gutter-xs q-mt-xs">
+                <q-badge
+                  rounded
+                  color="deep-purple-1"
+                  text-color="deep-purple-8"
+                  :label="p.role"
+                />
+
+                <!-- ✅ NEW: badge do tipo de atendimento -->
+                <q-badge
+                  rounded
+                  :color="attendanceColor(p.attendance_mode)"
+                  :text-color="attendanceTextColor(p.attendance_mode)"
+                  :label="attendanceLabel(p.attendance_mode)"
+                />
+              </div>
             </div>
           </q-card-section>
 
@@ -145,7 +154,7 @@
       v-model="editor.open"
       :mode="editor.mode"
       :value="staffStore.currentStaff"
-      :services="servicesStore.services"
+      :services="servicesForEditor"
       :units="units"
       @save="saveStaff"
     />
@@ -193,6 +202,42 @@ function workDays (schedule) {
   }, 0)
 }
 
+/* --- helpers attendance mode (mantidos) --- */
+function normalizeAttendanceMode (raw) {
+  const v = String(raw || '').trim()
+  if (v === 'fixed' || v === 'client_location' || v === 'mixed') return v
+  return 'fixed'
+}
+
+function attendanceLabel (modeRaw) {
+  const mode = normalizeAttendanceMode(modeRaw)
+  if (mode === 'client_location') return 'Domicílio'
+  if (mode === 'mixed') return 'Ambos'
+  return 'Unidade'
+}
+
+function attendanceColor (modeRaw) {
+  const mode = normalizeAttendanceMode(modeRaw)
+  if (mode === 'client_location') return 'purple-1'
+  if (mode === 'mixed') return 'blue-1'
+  return 'teal-1'
+}
+
+function attendanceTextColor (modeRaw) {
+  const mode = normalizeAttendanceMode(modeRaw)
+  if (mode === 'client_location') return 'purple-10'
+  if (mode === 'mixed') return 'blue-10'
+  return 'teal-10'
+}
+
+/**
+ * ✅ AJUSTE PEDIDO:
+ * Não filtrar serviços por tipo de atendimento ao enviar pro editor.
+ * Aqui só repassa a lista completa do store (sem filtro por attendance_mode).
+ * (Se quiser manter só ativos, isso já é feito no dialog agora.)
+ */
+const servicesForEditor = computed(() => servicesStore.services || [])
+
 /* ------- editor (modal completa) ------- */
 const editor = reactive({
   open: false,
@@ -208,10 +253,7 @@ function openCreate () {
 
 async function openEdit (row) {
   editor.mode = 'edit'
-
-  // IMPORTANT: buscar por ID pra garantir serviceIds vindo do backend (pivot)
   await staffStore.fetchStaffById(row.id)
-
   editor.open = true
 }
 
@@ -221,7 +263,6 @@ async function openAgenda (row) {
 }
 
 async function saveStaff (data) {
-  // o dialog devolve currentStaff já com serviceIds
   staffStore.setCurrentStaff(data)
 
   const resp = await staffStore.saveCurrentStaff()
@@ -230,9 +271,6 @@ async function saveStaff (data) {
   if (resp.ok && editor.mode === 'create') {
     await staffStore.fetchStaff()
   }
-
-  // opcional: se algum lugar depende da lista de services atualizada
-  // await servicesStore.fetchServices()
 }
 
 /* ------- remover / ativar ------- */
@@ -248,13 +286,9 @@ async function remove () {
 
   const resp = await staffStore.deleteStaff(rm.row.id)
   if (resp.ok) {
-    // se o store já removeu localmente, só fecha
     rm.open = false
     rm.row = null
   }
-
-  // opcional: se algum lugar depende da lista de services atualizada
-  // await servicesStore.fetchServices()
 }
 
 async function toggleActive (p) {
