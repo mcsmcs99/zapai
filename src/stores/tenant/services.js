@@ -37,6 +37,13 @@ function normalizeIcon (raw) {
   return 'content_cut'
 }
 
+function normalizeAttendanceMode (raw) {
+  const v = String(raw || '').trim()
+  if (v === 'fixed' || v === 'client_location' || v === 'mixed') return v
+  // fallback: mantém o comportamento atual (unidade)
+  return 'fixed'
+}
+
 export const useServicesStore = defineStore('services', {
   state: () => ({
     loadingList: false,
@@ -65,8 +72,9 @@ export const useServicesStore = defineStore('services', {
       duration: 30,
       description: '',
       status: 'active',
+      attendance_mode: 'fixed', // NEW
       collaboratorIds: [],
-      unitIds: [] // NEW
+      unitIds: []
     }
   }),
 
@@ -86,6 +94,7 @@ export const useServicesStore = defineStore('services', {
     setCurrentServiceField (key, val) {
       if (key in this.currentService) {
         if (key === 'icon') this.currentService[key] = normalizeIcon(val)
+        else if (key === 'attendance_mode') this.currentService[key] = normalizeAttendanceMode(val)
         else this.currentService[key] = val
 
         this.saveToSession()
@@ -93,7 +102,11 @@ export const useServicesStore = defineStore('services', {
     },
 
     setCurrentService (serviceData = {}) {
-      this.currentService = {
+      const attendanceMode =
+        serviceData.attendance_mode ??
+        serviceData.attendanceMode
+
+      const next = {
         id: serviceData.id ?? null,
         title: serviceData.title ?? '',
         icon: normalizeIcon(serviceData.icon),
@@ -102,11 +115,20 @@ export const useServicesStore = defineStore('services', {
         description: serviceData.description ?? '',
         status: serviceData.status || 'active',
 
+        attendance_mode: normalizeAttendanceMode(attendanceMode),
+
         collaboratorIds: uniqIds(serviceData.collaboratorIds ?? serviceData.collaborator_ids),
 
-        // NEW: vem do backend via pivot (array)
+        // vem do backend via pivot (array)
         unitIds: uniqIds(serviceData.unitIds ?? serviceData.unit_ids)
       }
+
+      // se for somente domicílio, não faz sentido manter unidades marcadas
+      if (next.attendance_mode === 'client_location') {
+        next.unitIds = []
+      }
+
+      this.currentService = next
       this.saveToSession()
     },
 
@@ -136,6 +158,7 @@ export const useServicesStore = defineStore('services', {
         duration: 30,
         description: '',
         status: 'active',
+        attendance_mode: 'fixed',
         collaboratorIds: [],
         unitIds: []
       }
@@ -190,8 +213,13 @@ export const useServicesStore = defineStore('services', {
         if (data.currentService) {
           this.currentService = { ...this.currentService, ...data.currentService }
           this.currentService.icon = normalizeIcon(this.currentService.icon)
+          this.currentService.attendance_mode = normalizeAttendanceMode(this.currentService.attendance_mode)
           this.currentService.collaboratorIds = uniqIds(this.currentService.collaboratorIds)
           this.currentService.unitIds = uniqIds(this.currentService.unitIds)
+
+          if (this.currentService.attendance_mode === 'client_location') {
+            this.currentService.unitIds = []
+          }
         }
       } catch (e) {
         console.error('Erro ao carregar services_state da sessão', e)
@@ -210,6 +238,13 @@ export const useServicesStore = defineStore('services', {
 
       out.icon = normalizeIcon(out.icon)
 
+      // attendance_mode (garante valor esperado)
+      if ('attendanceMode' in out && out.attendance_mode === undefined) {
+        out.attendance_mode = out.attendanceMode
+      }
+      if ('attendanceMode' in out) delete out.attendanceMode
+      out.attendance_mode = normalizeAttendanceMode(out.attendance_mode)
+
       // collaborators
       if ('collaborator_ids' in out && out.collaboratorIds === undefined) {
         out.collaboratorIds = out.collaborator_ids
@@ -217,11 +252,17 @@ export const useServicesStore = defineStore('services', {
       if ('collaborator_ids' in out) delete out.collaborator_ids
       if ('collaboratorIds' in out) out.collaboratorIds = uniqIds(out.collaboratorIds)
 
+      // units
       if ('unit_ids' in out && out.unitIds === undefined) {
         out.unitIds = out.unit_ids
       }
       if ('unit_ids' in out) delete out.unit_ids
       if ('unitIds' in out) out.unitIds = uniqIds(out.unitIds)
+
+      // regra: se for apenas domicílio, não envia unidades
+      if (out.attendance_mode === 'client_location') {
+        out.unitIds = []
+      }
 
       return out
     },
@@ -250,12 +291,18 @@ export const useServicesStore = defineStore('services', {
 
         const { data } = await api.get('/tenant/services', { params: query })
 
-        this.services = (data.data || []).map(s => ({
-          ...s,
-          icon: normalizeIcon(s.icon),
-          collaboratorIds: uniqIds(s.collaboratorIds ?? s.collaborator_ids),
-          unitIds: uniqIds(s.unitIds ?? s.unit_ids)
-        }))
+        this.services = (data.data || []).map(s => {
+          const attendanceMode = normalizeAttendanceMode(s.attendance_mode ?? s.attendanceMode)
+          return {
+            ...s,
+            icon: normalizeIcon(s.icon),
+            attendance_mode: attendanceMode,
+            collaboratorIds: uniqIds(s.collaboratorIds ?? s.collaborator_ids),
+            unitIds: attendanceMode === 'client_location'
+              ? []
+              : uniqIds(s.unitIds ?? s.unit_ids)
+          }
+        })
 
         if (data.meta) {
           this.meta = { ...this.meta, ...data.meta }
@@ -290,11 +337,16 @@ export const useServicesStore = defineStore('services', {
           params: { user_id: userId, group_id: groupId }
         })
 
+        const attendanceMode = normalizeAttendanceMode(data.attendance_mode ?? data.attendanceMode)
+
         const normalized = {
           ...data,
           icon: normalizeIcon(data.icon),
+          attendance_mode: attendanceMode,
           collaboratorIds: uniqIds(data.collaboratorIds ?? data.collaborator_ids),
-          unitIds: uniqIds(data.unitIds ?? data.unit_ids)
+          unitIds: attendanceMode === 'client_location'
+            ? []
+            : uniqIds(data.unitIds ?? data.unit_ids)
         }
 
         this.currentService = { ...this.currentService, ...normalized }
@@ -346,12 +398,16 @@ export const useServicesStore = defineStore('services', {
         }
 
         const data = resp.data
+        const attendanceMode = normalizeAttendanceMode(data.attendance_mode ?? data.attendanceMode)
 
         const normalized = {
           ...data,
           icon: normalizeIcon(data.icon),
+          attendance_mode: attendanceMode,
           collaboratorIds: uniqIds(data.collaboratorIds ?? data.collaborator_ids),
-          unitIds: uniqIds(data.unitIds ?? data.unit_ids)
+          unitIds: attendanceMode === 'client_location'
+            ? []
+            : uniqIds(data.unitIds ?? data.unit_ids)
         }
 
         this.currentService = { ...this.currentService, ...normalized }
@@ -408,12 +464,16 @@ export const useServicesStore = defineStore('services', {
         })
 
         const data = resp.data
+        const attendanceMode = normalizeAttendanceMode(data.attendance_mode ?? data.attendanceMode)
 
         const normalized = {
           ...data,
           icon: normalizeIcon(data.icon),
+          attendance_mode: attendanceMode,
           collaboratorIds: uniqIds(data.collaboratorIds ?? data.collaborator_ids),
-          unitIds: uniqIds(data.unitIds ?? data.unit_ids)
+          unitIds: attendanceMode === 'client_location'
+            ? []
+            : uniqIds(data.unitIds ?? data.unit_ids)
         }
 
         const idx = this.services.findIndex(s => s.id === normalized.id)

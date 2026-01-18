@@ -101,6 +101,16 @@
               <div class="q-mt-sm text-body2">
                 {{ s.description }}
               </div>
+
+              <!-- Tipo de atendimento -->
+              <div class="q-mt-sm">
+                <q-badge
+                  color="grey-2"
+                  text-color="grey-9"
+                  rounded
+                  :label="attendanceModeLabel(s)"
+                />
+              </div>
             </div>
           </q-card-section>
 
@@ -143,7 +153,9 @@
                 :label="u.name"
               />
             </div>
-            <div v-else class="text-grey-6">Nenhuma unidade</div>
+            <div v-else class="text-grey-6">
+              {{ unitEmptyLabel(s) }}
+            </div>
           </q-card-section>
         </q-card>
       </div>
@@ -240,6 +252,30 @@ const getUnitIds = (service) =>
 
 const mapUnits = (ids) =>
   units.value.filter(u => (ids || []).includes(u.id))
+
+/**
+ * Novo: label do tipo de atendimento do serviço.
+ * Fallback para serviços antigos: "fixed"
+ */
+const getAttendanceMode = (service) =>
+  service?.attendance_mode ?? service?.attendanceMode ?? 'fixed'
+
+const attendanceModeLabel = (service) => {
+  const mode = getAttendanceMode(service)
+  if (mode === 'client_location') return 'Domicílio'
+  if (mode === 'mixed') return 'Unidade + Domicílio'
+  return 'Unidade'
+}
+
+const acceptsFixed = (service) => {
+  const mode = getAttendanceMode(service)
+  return mode === 'fixed' || mode === 'mixed'
+}
+
+const unitEmptyLabel = (service) => {
+  if (!acceptsFixed(service)) return 'Não aplicável (domicílio)'
+  return 'Nenhuma unidade'
+}
 
 /* Modal de criar/editar */
 const dlg = reactive({

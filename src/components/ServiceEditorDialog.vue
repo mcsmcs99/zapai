@@ -117,6 +117,28 @@
               :rules="[v => v > 0 || 'Inválido']"
             />
 
+            <!-- Tipo de atendimento (gatilho do menu) -->
+            <q-select
+              class="col-12 service-attendance-select"
+              v-model="local.attendance_mode"
+              :options="attendanceModeOptions"
+              emit-value
+              map-options
+              outlined
+              dense
+              hide-bottom-space
+              label="Tipo de atendimento *"
+              :rules="[v => !!v || 'Selecione o tipo de atendimento']"
+            >
+              <template #prepend>
+                <q-icon name="place" />
+              </template>
+
+              <template #hint>
+                Define se este serviço aparece no agendamento por unidade, domicílio, ou em ambos.
+              </template>
+            </q-select>
+
             <!-- Descrição -->
             <q-input
               class="col-12"
@@ -166,10 +188,20 @@
             </q-list>
           </div>
 
-          <!-- Unidades -->
+          <!-- Unidades (só faz sentido quando aceita agendamento por unidade) -->
           <div class="q-mt-xl">
-            <div class="text-subtitle1 text-weight-bold q-mb-sm">
-              Unidades onde este serviço estará disponível
+            <div class="row items-center q-gutter-sm q-mb-sm">
+              <div class="text-subtitle1 text-weight-bold">
+                Unidades onde este serviço estará disponível
+              </div>
+              <q-badge
+                v-if="!acceptsFixed"
+                outline
+                color="grey-7"
+                class="q-ml-sm"
+              >
+                Não obrigatório (serviço não atende por unidade)
+              </q-badge>
             </div>
 
             <q-banner
@@ -188,12 +220,14 @@
               bordered
               class="rounded-borders"
               style="max-height: 240px; overflow:auto"
+              :class="{ 'is-disabled-section': !acceptsFixed }"
             >
               <q-item v-for="u in units" :key="u.id" tag="label">
                 <q-item-section side>
                   <q-checkbox
                     v-model="local.unitIds"
                     :val="Number(u.id)"
+                    :disable="!acceptsFixed"
                   />
                 </q-item-section>
 
@@ -207,6 +241,10 @@
                 </q-item-section>
               </q-item>
             </q-list>
+
+            <div v-if="!acceptsFixed" class="text-caption text-grey-7 q-mt-sm">
+              Este serviço está configurado como <b>domicílio</b>. Por isso, as unidades não precisam ser selecionadas.
+            </div>
           </div>
 
         </div>
@@ -252,6 +290,10 @@ function normalizeService (v = {}) {
   if (typeof out.icon === 'object' && out.icon?.value) out.icon = out.icon.value
   if (!out.icon || typeof out.icon !== 'string') out.icon = 'content_cut'
 
+  // novo campo (tipo de atendimento)
+  // fallback: se backend ainda não mandar, assume "fixed" (comportamento atual)
+  if (!out.attendance_mode) out.attendance_mode = 'fixed'
+
   delete out.collaborator_ids
   delete out.unit_ids
 
@@ -282,6 +324,26 @@ const iconName = computed(() => {
   if (v && typeof v === 'object' && v.value) return v.value
   return 'content_cut'
 })
+
+const attendanceModeOptions = [
+  { label: 'Atendimento por unidade (presencial)', value: 'fixed' },
+  { label: 'Atendimento domiciliar (endereço do cliente)', value: 'client_location' },
+  { label: 'Ambos (unidade e domicílio)', value: 'mixed' }
+]
+
+const acceptsFixed = computed(() => {
+  return local.attendance_mode === 'fixed' || local.attendance_mode === 'mixed'
+})
+
+// se trocar para domicílio, não faz sentido manter units selecionadas
+watch(
+  () => local.attendance_mode,
+  (val) => {
+    if (val === 'client_location') {
+      local.unitIds = []
+    }
+  }
+)
 
 const iconOptions = [
   { label: 'Tesoura (Barbearia)', value: 'content_cut' },
@@ -382,5 +444,33 @@ function onSubmit () {
 /* trava layout do select */
 .service-icon-select {
   min-width: 0;
+}
+
+/* trava o select de tipo de atendimento (evita resize por label maior/menor) */
+.service-attendance-select {
+  min-width: 0;
+}
+
+/* força o campo a não ficar “pulando” com textos diferentes */
+.service-attendance-select :deep(.q-field__control) {
+  white-space: nowrap;
+}
+
+/* e evita que o texto do valor “estique” a linha */
+.service-attendance-select :deep(.q-field__native),
+.service-attendance-select :deep(.q-field__input),
+.service-attendance-select :deep(.q-field__control-container) {
+  min-width: 0;
+}
+
+/* opcional: mostra ellipsis se o label for grande */
+.service-attendance-select :deep(.q-field__native span),
+.service-attendance-select :deep(.q-field__input) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.is-disabled-section {
+  opacity: 0.65;
 }
 </style>
